@@ -160,3 +160,16 @@ catching you out, a fact about the stack the agent keeps getting wrong --- write
 it down here. Growing this file is the work of harness engineering, and the gap
 between this boilerplate and your own version is part of what your prototype
 says about the developer you're becoming.
+
+## Rules carried forward
+
+- Never convert a subjective impression into a factual claim about the subject
+  of the prototype. A personal reaction ("this dataset feels overwhelming to
+  me") is evidence I can use to shape the explainer; it is not itself a claim
+  about the phenomenon and must not be written as one.
+- Before adding a spec test, trace it to either a line in the published spec or
+  an explicitly approved design decision I've recorded in the repo (e.g. a
+  planning note). Don't invent a requirement the spec doesn't state just
+  because it would be easy to test.
+- When writing PROCESS.md, reflections, or other project evidence from my
+  perspective, use "I" and "my"; never refer to me as "the student."
