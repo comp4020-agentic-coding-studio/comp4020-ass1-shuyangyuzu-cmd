@@ -180,3 +180,9 @@ says about the developer you're becoming.
   continuous model, and verify boundary cases independently of render timing.
   A fixed-timestep discrepancy at a boundary is an implementation artefact to
   fix, not evidence that the boundary itself is ambiguous.
+- When I request exact file contents, raw command output, or a complete diff,
+  provide that primary evidence in the requested form before any summary or
+  explanation. Never substitute a table, interpretation, completion claim, or
+  previously shown tool output. If it is too long for one response, split it
+  into numbered, complete sections with explicit line ranges and no omissions
+  or silent truncation.
