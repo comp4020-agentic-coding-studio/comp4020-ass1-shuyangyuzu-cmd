@@ -153,6 +153,115 @@ result once an input is found invalid.
 - `NaN`, `+Infinity`, and `-Infinity` are invalid wherever they could appear
   — for `H`, for `a`, and for `p`.
 
+## Trajectory API and completed-attempt result
+
+`[Approved design decision]`
+
+Two additional pure functions expose the analytic trajectory at an arbitrary
+physical time, and one function assembles the full outcome of a completed
+attempt, for later consumption by animation, reduced-motion, and Result UI —
+without any of those callers re-deriving the physics.
+
+### Trajectory time input contract
+
+- `positionAt(model, p, t)` and `velocityAt(model, p, t)` accept a physical
+  time `t` and return the analytic position (m) and velocity (m/s) at that
+  instant.
+- `t` must be finite and satisfy `0 ≤ t ≤ stopTime(model, p)`. Any other `t`
+  (negative, past `stopTime`, `NaN`, `±Infinity`) throws `RangeError` — the
+  analytic model never clamps time, matching this document's no-silent-
+  clamping rule (see "Model API input contract").
+- A future rendering caller (animation frame loop, reduced-motion path) may
+  clamp its own sampled playback time before calling the model — for example
+  to absorb `requestAnimationFrame` overshoot past the computed stop instant
+  — but that clamping happens in the caller, never inside the model, and must
+  not alter which classification or semantic state the attempt resolves to.
+
+### Validation order
+
+- `positionAt` and `velocityAt` validate, in order: `model`, then `p`, then
+  `t`. `t`'s own validity depends on `p` (via `stopTime(model,p)`), so it is
+  necessarily checked last.
+- `buildAttemptResult` validates `model`, then `p`, before composing any part
+  of the result — it does not rely on incidental validation inside whichever
+  composed function happens to be called first.
+- Every invalid argument throws `RangeError`, consistent with every other
+  exported function.
+
+### Exact boundary-event policy
+
+`t=0`, `t=switchTime(model,p)`, and `t=stopTime(model,p)` are exact analytic
+events, not points sampled from a general phase formula:
+
+- `t=0` → position `0`, velocity `0`, exactly, for every `p`.
+- `t=switchTime(model,p)` → position `switchDistance(model,p)`, velocity
+  `switchSpeed(model,p)`, exactly.
+- `t=stopTime(model,p)` → position `stopPosition(model,p)`, velocity exactly
+  `0`, for every `p` (not only `p=50`) — matching "Displayed quantities and
+  units"'s "final velocity is always exactly `0`, by construction, for every
+  `p`".
+
+`positionAt`/`velocityAt` return these known states directly at the three
+boundary instants, rather than relying on the general acceleration- or
+braking-phase formula to approximate them — no epsilon changes which event a
+given `t` identifies, per this repo's `CLAUDE.md` rule against classifying
+boundary events from floating-point/render-timing artefacts.
+
+### Completed-attempt result shape
+
+`buildAttemptResult(model, p)` returns a `readonly` discriminated union keyed
+by `classification`, composed entirely from the already-defined functions
+(`classify`, `switchDistance`, `switchSpeed`, `switchTime`, `stopPosition`,
+`stopTime`, `speedAtTarget`, `crossingTime`) — it introduces no new physics.
+
+```ts
+export type SwitchState = {
+  readonly position: number
+  readonly velocity: number
+  readonly time: number
+}
+
+export type FinalState = {
+  readonly position: number
+  readonly velocity: 0
+  readonly time: number
+}
+
+export type AttemptResult =
+  | {
+      readonly classification: "short"
+      readonly p: number
+      readonly switchState: SwitchState
+      readonly finalState: FinalState
+      readonly shortfall: number
+    }
+  | {
+      readonly classification: "correct"
+      readonly p: 50
+      readonly switchState: SwitchState
+      readonly finalState: FinalState
+      readonly minimumTime: number
+    }
+  | {
+      readonly classification: "overshoot"
+      readonly p: number
+      readonly switchState: SwitchState
+      readonly finalState: FinalState
+      readonly velocityAtTarget: number
+      readonly targetCrossingTime: number
+    }
+```
+
+- Field name is `velocity` throughout `SwitchState`/`FinalState` — not
+  `speed` — for consistency with "Point of view"'s distinction between
+  position and velocity as the two state quantities that matter.
+- Category-specific fields (`shortfall`; `minimumTime`; `velocityAtTarget`
+  and `targetCrossingTime`) appear only on their own variant, never on the
+  others — a `short` result has no `minimumTime`, an `overshoot` result has
+  no `shortfall`, and so on.
+- `correct`'s `p` is fixed to the literal `50`, reflecting `classify`'s own
+  contract that only `p=50` ever classifies as `correct`.
+
 ## Scope exclusions
 
 Point mass only. No modeling of mass, motor torque-speed curve, gravity,
@@ -282,6 +391,39 @@ claimed to.
   Infinity}`; `a ∈ {0, −1.5, NaN, Infinity}`; `p ∈ {0, 101, −1, 1.5, NaN,
   Infinity}`.
   `[Approved design decision]` — see "Model API input contract".
+- `positionAt`/`velocityAt` at `t=0` return `(0, 0)` exactly, across a full
+  sweep of `p ∈ {1,…,100}`.
+  `[Derived model invariant]`.
+- For arbitrary `t` strictly inside the acceleration phase
+  (`0<t<switchTime(p)`) and the braking phase (`switchTime(p)<t<stopTime(p)`),
+  `positionAt`/`velocityAt` match the raw two-phase kinematic formulas
+  (`x=½at², v=at` and `x=s+v1τ−½aτ², v=v1−aτ`) computed independently of
+  `switchTime`/`stopTime` themselves. This is the independent formula check
+  for the trajectory functions.
+  `[Derived model invariant]`.
+- At `t=switchTime(p)` and `t=stopTime(p)`, `positionAt`/`velocityAt` equal
+  `switchDistance`/`switchSpeed` and `stopPosition`/`0` respectively, for a
+  full sweep of `p`. These are consistency checks between the trajectory
+  functions and the already-verified boundary functions, not independent
+  proof — the independent check is the interior-phase item above.
+  `[Derived model invariant]`.
+- Velocity is non-negative and position is non-decreasing across sampled
+  interior `t`, for both `DEFAULT_MODEL` and a second model.
+  `[Derived model invariant]`.
+- For `p>50`, `positionAt(crossingTime(p))≈H` and
+  `velocityAt(crossingTime(p))≈speedAtTarget(p)`, linking the trajectory
+  functions to the independently-defined H-crossing functions.
+  `[Derived model invariant]`.
+- `positionAt`/`velocityAt` reject `t<0`, `t>stopTime(p)`, `NaN`, and
+  `±Infinity` with `RangeError`, without clamping.
+  `[Approved design decision]` — see "Trajectory time input contract".
+- `buildAttemptResult` produces the correct discriminated variant and
+  category-specific fields for representative `p<50`, `p=50`, and `p>50`,
+  with no cross-category fields present on the wrong variant, and rejects
+  invalid `H`/`a`/`p` with `RangeError` according to the Model API input
+  contract, validating `model` before `p` rather than relying on incidental
+  validation in composed functions.
+  `[Approved design decision]` — see "Completed-attempt result shape".
 
 ### Interaction/component tests (written once controls exist)
 
