@@ -173,3 +173,10 @@ says about the developer you're becoming.
   because it would be easy to test.
 - When writing PROCESS.md, reflections, or other project evidence from my
   perspective, use "I" and "my"; never refer to me as "the student."
+- Do not classify a continuous threshold or boundary event (reaching a target
+  state, a mode switch, a pass/fail verdict) solely from animation frames or
+  fixed-timestep samples. Derive the event analytically where a closed form
+  exists, or use explicit event detection/interpolation against the
+  continuous model, and verify boundary cases independently of render timing.
+  A fixed-timestep discrepancy at a boundary is an implementation artefact to
+  fix, not evidence that the boundary itself is ambiguous.
