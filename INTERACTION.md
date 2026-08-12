@@ -91,6 +91,22 @@ Verified reference values (checked against the formulas above):
 - `p=100` final position: `x_stop(100) = 2H = 20 m`
 - `p=100` physical stopping time: `T(100) = 2√(2H/a) = 2√(40/3) ≈ 7.302967 s`
 
+## Model API input contract
+
+`[Approved design decision]`
+
+Every exported computational function — including `classify(p)` — validates
+its inputs before computing anything, and throws `RangeError` on the first
+invalid argument. No input is silently clamped, normalised, coerced, or
+allowed to produce `NaN`; no function partially evaluates and returns a
+result once an input is found invalid.
+
+- `H`: must be finite and `> 0`.
+- `a`: must be finite and `> 0`.
+- `p`: must be finite, integer-valued, and within `1…100` inclusive.
+- `NaN`, `+Infinity`, and `-Infinity` are invalid wherever they could appear
+  — for `H`, for `a`, and for `p`.
+
 ## Scope exclusions
 
 Point mass only. No modeling of mass, motor torque-speed curve, gravity,
@@ -214,6 +230,12 @@ claimed to.
   `[Derived model invariant]` — literal checks of the "Model constants and
   units" reference values, additional to (not replacing) the parameterised
   checks above.
+- Invalid inputs throw `RangeError` and compute nothing further, checked
+  against `classify` and at least one model-taking function (e.g.
+  `stopPosition`) with a small representative table: `H ∈ {0, −10, NaN,
+  Infinity}`; `a ∈ {0, −1.5, NaN, Infinity}`; `p ∈ {0, 101, −1, 1.5, NaN,
+  Infinity}`.
+  `[Approved design decision]` — see "Model API input contract".
 
 ### Interaction/component tests (written once controls exist)
 
