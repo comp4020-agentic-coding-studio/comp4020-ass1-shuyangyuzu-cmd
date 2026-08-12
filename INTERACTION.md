@@ -13,6 +13,52 @@ short, stops exactly at the target, or overshoots, revising across attempts
 to find where acceleration must switch to braking so the elevator reaches
 the target position with zero velocity.
 
+## Audience and progressive disclosure
+
+`[Approved design decision]`
+
+The primary visitor has no control-theory background and does not need one:
+the interface must be understandable without knowing optimisation,
+differential equations, phase planes, Pontryagin's principle, or the term
+"bang-bang control." Progressive disclosure sequence:
+
+1. Begin with the plain task: get the elevator to the target as quickly as
+   possible and stop there.
+2. Ask the visitor to choose where braking begins.
+3. Let the visible consequence teach early/exact/late.
+4. Explain in plain language, by default, that arrival requires both the
+   right position and zero velocity.
+5. Reveal the formal model or terminology only after the interaction, if
+   included at all — and only if the visitor opts in.
+
+Unit symbols (`m`, `s`, `m/s`, per "Displayed quantities and units") are not
+specialist vocabulary and are not restricted by this section — they help
+distinguish position from velocity, which this explainer's point of view
+depends on.
+
+Plain language versus formal disclosure:
+
+- A plain-language interpretation of the outcome — why this attempt stopped
+  short, arrived correctly, or overshot — is visible by default at Result,
+  and must be enough on its own for the visitor to revise the next attempt.
+- Equations, theorem/algorithm names, and specialist control-theory
+  terminology may appear only inside an optional formal-model disclosure,
+  reachable only after at least one Result has been reached, collapsed/closed
+  by default.
+- The visitor must never need to open that disclosure to understand an
+  early, exact, or late result.
+
+Default-visible vocabulary boundary (case-insensitive):
+
+- Forbidden in default-visible UI: "bang-bang", "Pontryagin", "optimal
+  control", "phase plane", "double integrator", "state-space", "switching
+  function", "u(t)".
+- Allowed: "position", "speed", "velocity", "acceleration", "braking",
+  "target", "too early", "too late", "stopped". "Velocity" is permitted
+  because this explainer's point of view depends on distinguishing it from
+  position (see "Point of view"), but default-visible copy must explain what
+  it means in ordinary language rather than assume the visitor already knows.
+
 ## Verified model and formulas
 
 Fixed model (symbolic; see "Model constants and units" below for the
@@ -254,6 +300,20 @@ claimed to.
   `[Approved design decision]`, applying the harness rule in this repo's
   `CLAUDE.md` (continuous events must not be classified from render
   timing).
+- Default-visible UI contains none of the forbidden specialist terms
+  (case-insensitive): "bang-bang", "Pontryagin", "optimal control", "phase
+  plane", "double integrator", "state-space", "switching function", "u(t)".
+  `[Approved design decision]` — see "Audience and progressive disclosure".
+- The formal-model disclosure (if implemented) is unavailable before the
+  first Result and collapsed/closed by default afterward.
+  `[Approved design decision]` — see "Audience and progressive disclosure".
+- Every Result classification (`short`, `correct`, `overshoot`) renders a
+  dedicated plain-language explanation element, identified semantically
+  (e.g. a role or test id), not by asserting an exact sentence.
+  `[Approved design decision]` — see "Audience and progressive disclosure".
+
+None of these three checks is evidence that the copy is actually clear to a
+novice — only that the structural gating and vocabulary boundary hold.
 
 ### Browser-level and manual checks (not exercisable by unit/component tests)
 
@@ -273,6 +333,15 @@ claimed to.
   `[Approved design decision]` — not named in the published brief.
 - Behaviour on a slow connection (no broken or stuck states).
   `[Published spec]` — "a slow connection."
+- Someone unfamiliar with control theory can identify the task, choose a
+  braking position, run an attempt, and explain why it stopped short,
+  arrived correctly, or overshot, without opening the formal disclosure;
+  across guided representative attempts they can articulate that success
+  requires reaching the target position with zero velocity. Observed
+  confusion is recorded and the interface revised if needed.
+  `[Approved design decision]` — a green automated suite, including the
+  component checks above, is explicitly not evidence that this judgment
+  passes; only a person can make this call.
 
 A unit test passing on the formulas above is not evidence that any of the
 browser-level checks pass; each tier must be exercised on its own terms.
