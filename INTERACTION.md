@@ -15,7 +15,8 @@ the target position with zero velocity.
 
 ## Verified model and formulas
 
-Fixed model (symbolic; see "Unresolved decision" below for concrete values):
+Fixed model (symbolic; see "Model constants and units" below for the
+resolved values):
 
 ```
 ẋ = v
@@ -52,6 +53,44 @@ floating-point closeness may still be used inside formula *tests* where the
 underlying math is irrational (e.g. square roots); that is test precision,
 not a change to the visitor's outcome.
 
+Switch time, physical stopping time, and the H-crossing event, derived from
+the same two-phase kinematics (`s = s(p)`, `v1 = v1(p)` is the speed at the
+switch):
+
+```
+t1(p) = √(2s/a)                             switch time (= T(p)/2, for any p)
+v1(p) = √(2a·s) = a·t1(p)                   speed at the switch
+T(p)  = 2·t1(p) = 2√(2s/a)                  physical stopping time (v=0 at x_stop)
+```
+
+H-crossing is a distinct event only for `p>50`, where the elevator passes
+through `x=H` with `v>0` before its final stop. At `p=50` the arrival at H
+*is* the stop — no separate crossing event exists. For `p<50`, `x` never
+reaches `H` at all (`x_stop(p)<H`), so no crossing time is defined either.
+
+```
+v(H,p)      = √(2a(2s−H))                       real-valued only for p≥50
+t_Hcross(p) = t1(p) + (v1(p) − v(H,p)) / a       defined only for p>50
+```
+
+## Model constants and units
+
+Resolved (supersedes the earlier "unresolved decision"):
+
+- `H = 10 m`, `a = 1.5 m/s²`. Internal model values use SI units throughout.
+- The UI displays explicit SI unit labels: `m`, `s`, and `m/s`.
+- This remains an idealised point-mass model; the disclaimer in "Scope
+  exclusions" stays visible in the UI, not only in this document.
+
+Verified reference values (checked against the formulas above):
+
+- optimal switching position: `s* = H/2 = 5 m`
+- optimal switching speed: `v* = √(aH) = √15 ≈ 3.872983 m/s`
+- minimum valid time: `T* = 2√(H/a) = 2√(20/3) ≈ 5.163978 s`
+- `p=100` velocity at H: `v(H,100) = √(2aH) = √30 ≈ 5.477226 m/s`
+- `p=100` final position: `x_stop(100) = 2H = 20 m`
+- `p=100` physical stopping time: `T(100) = 2√(2H/a) = 2√(40/3) ≈ 7.302967 s`
+
 ## Scope exclusions
 
 Point mass only. No modeling of mass, motor torque-speed curve, gravity,
@@ -77,22 +116,21 @@ Predicting → Running → Result → (Retry → Predicting) | (Reset → Predic
   for `p>50` this is *after* the intermediate H-crossing event, not at it.
 - **Retry** / **Reset**: as above.
 
-Visible outcomes:
-- Early (`p<50`): elevator visibly settles below the target marker; Result
-  shows the final resting position and `v=0`.
-- Exact (`p=50`): elevator visibly settles exactly at the target marker;
-  Result shows `v=0` at the target.
+Visible outcomes (what changes on screen; see "Displayed quantities and
+units" for the numbers shown):
+- Early (`p<50`): elevator visibly settles below the target marker.
+- Exact (`p=50`): elevator visibly settles exactly at the target marker.
 - Late (`p>50`): elevator visibly continues past the target marker after
-  the at-target velocity is captured, coming to rest higher up; Result
-  shows both the captured at-target velocity and the final resting position.
+  the at-target instant, coming to rest higher up.
 
 ## Input, history, and responsive behaviour
 
 - Pointer and touch snap to integer percentage steps; keyboard arrows move
   by exactly one step. `50` is exactly selectable by all three input modes
   and is never labelled as special before a successful run.
-- History retains only the 3 most recent attempts (selected percentage,
-  category, relevant state evidence). No score, streak, or ranking.
+- History retains only the 3 most recent attempts — see "Displayed
+  quantities and units" for exactly which fields per category. No score,
+  streak, or ranking.
 - Must work at both marking viewports — "desktop and phone" per the
   published brief. This repository's `CLAUDE.md` specifies these as
   1920×1080 and 390×844 respectively; that pixel-level detail comes from
@@ -104,6 +142,49 @@ Visible outcomes:
   reaches Result immediately with the same classification and history
   entry as the animated path — the outcome is computed analytically before
   any frame is drawn, so disabling animation changes presentation only.
+
+## Displayed quantities and units
+
+All displayed numeric values are physical model quantities with explicit SI
+unit labels (`m`, `s`, `m/s`) — never playback/animation time, and never a
+bare unlabelled number. The idealised point-mass disclaimer (see "Scope
+exclusions") stays visible in the UI alongside these numbers.
+
+- **Predicting**: the selected switching percentage only (no unit — it is
+  not yet a physical quantity).
+- **Running**: current analytic position (m) and velocity (m/s), sampled
+  from the trajectory already computed for the locked `p` — never derived
+  from or altered by the animation frame rate.
+- **Result, every attempt**: selected percentage; classification; final
+  position and final velocity shown together as the final state (m, m/s) —
+  final velocity is always exactly `0`, by construction, for every `p`; and
+  physical elapsed time (s), i.e. `T(p)`, never the scaled playback duration.
+- **Early (`p<50`) additionally**: distance short of H, `H − x_stop(p)` (m)
+  — paired with the always-zero final velocity, so the visitor reads
+  "arrived at rest, but not at the target place."
+- **Late (`p>50`) additionally**: the analytically captured velocity at H,
+  `v(H,p)` (m/s) — contrasted with the final state's velocity of `0`, so the
+  visitor reads "passed through the target place, but not at rest" — the
+  mirror image of the early case.
+- **Exact (`p=50`)**: identifies the result as the minimum valid time and
+  reveals the switching position as `50%`. This is the one case where the
+  target place and the target state coincide.
+- **History (max 3 entries, no score)**: percentage, category, and exactly
+  one category-relevant piece of state evidence — final position/shortfall
+  for early, at-H velocity for late, target state and minimum valid time for
+  exact.
+
+## Animation pacing
+
+`visualDuration = max(0.8 s, 0.45 × T(p))` — a floor only, no upper clamp.
+With `H=10, a=1.5` and `p` bounded to `{1,…,100}`, `T(p)` itself already
+bounds `visualDuration` to at most `0.45 × T(100) = 0.45 × 2√(40/3) ≈
+3.286335 s`, so a separate ceiling is unnecessary.
+
+Displayed time is always the physical model time `T(p)` (see "Displayed
+quantities and units"), never this scaled playback duration — scaling
+changes only how long the animation takes to draw, never what number is
+shown.
 
 ## Acceptance criteria
 
@@ -126,6 +207,13 @@ claimed to.
 - The classification function matches the formulas above across a full
   sweep of `p ∈ {1,…,100}`.
   `[Derived model invariant]`.
+- With the resolved constants `H=10 m, a=1.5 m/s²`: `p=50` gives
+  `s*=5 m`, `v*=√15≈3.872983 m/s`, `T*=2√(20/3)≈5.163978 s`; `p=100` gives
+  `v(H,100)=√30≈5.477226 m/s`, `x_stop(100)=20 m`,
+  `T(100)=2√(40/3)≈7.302967 s`.
+  `[Derived model invariant]` — literal checks of the "Model constants and
+  units" reference values, additional to (not replacing) the parameterised
+  checks above.
 
 ### Interaction/component tests (written once controls exist)
 
@@ -166,19 +254,6 @@ claimed to.
 
 A unit test passing on the formulas above is not evidence that any of the
 browser-level checks pass; each tier must be exercised on its own terms.
-
-## Unresolved decision: H, a values and units
-
-Not yet approved. Until they are:
-
-- `H` and `a` remain symbolic in this contract and in any implementation —
-  no concrete numeric values or units are chosen yet.
-- The UI must not display metres, seconds, or m/s (or any other physical
-  unit) until concrete values and units for `H` and `a` are approved.
-- Visual playback duration may be scaled for pacing independently of the
-  analytic time `T`, but any displayed physical quantity (position,
-  velocity, time) must be computed from the analytic model, not fitted to
-  the animation's pacing.
 
 ## Authoritative sources (mathematical claim)
 
