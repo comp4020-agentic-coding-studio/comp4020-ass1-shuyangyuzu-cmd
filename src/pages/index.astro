@@ -21,25 +21,29 @@ const brakingPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, initi
     <h1>{COPY.heading}</h1>
     <p data-testid="task">{COPY.task}</p>
     <div data-testid="elevator-app">
-      <section data-testid="predicting">
-        <label for="percentage-input">{COPY.sliderLabel}</label>
-        <input
-          id="percentage-input"
-          data-testid="percentage-input"
-          type="range"
-          min="1"
-          max="100"
-          step="1"
-          value={initialUIState.p}
-        />
-        <span data-testid="percentage-value">{initialUIState.p}%</span>
-        <button type="button" data-testid="run-button">{COPY.runButton}</button>
-        <div data-testid="shaft" class="shaft">
-          <div data-testid="target-marker" class="marker marker-target" style={`bottom: ${targetPercent}%;`}>
+      <section data-testid="predicting" class="panel">
+        <div class="shaft-col">
+          <div data-testid="shaft" class="shaft">
+            <div data-testid="target-marker" class="marker marker-target" style={`bottom: ${targetPercent}%;`}>
+            </div>
+            <div data-testid="braking-marker" class="marker marker-braking" style={`bottom: ${brakingPercent}%;`}>
+            </div>
+            <div data-testid="car" class="car" style={`bottom: ${carPercent}%;`}></div>
           </div>
-          <div data-testid="braking-marker" class="marker marker-braking" style={`bottom: ${brakingPercent}%;`}>
-          </div>
-          <div data-testid="car" class="car" style={`bottom: ${carPercent}%;`}></div>
+        </div>
+        <div class="content-col">
+          <label for="percentage-input">{COPY.sliderLabel}</label>
+          <input
+            id="percentage-input"
+            data-testid="percentage-input"
+            type="range"
+            min="1"
+            max="100"
+            step="1"
+            value={initialUIState.p}
+          />
+          <span data-testid="percentage-value">{initialUIState.p}%</span>
+          <button type="button" data-testid="run-button" class="comic-button">{COPY.runButton}</button>
         </div>
       </section>
     </div>

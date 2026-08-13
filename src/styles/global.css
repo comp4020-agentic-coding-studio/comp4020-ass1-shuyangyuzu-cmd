@@ -1,28 +1,203 @@
+@font-face {
+  font-family: Bangers;
+  src: url("../assets/fonts/Bangers-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ink: #0a0a0a;
+  --paper: #fff;
+  --line-thick: 0.25rem;
+  --line-thin: 0.125rem;
+  --font-display: bangers, "Segoe UI Black", impact, "Arial Black", sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-numeric: ui-monospace, sfmono-regular, "Cascadia Code", consolas, "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  padding: 2rem;
-  font-family: system-ui, sans-serif;
+  padding: clamp(1rem, 4vw, 2rem);
+  font-family: var(--font-body);
   line-height: 1.6;
-  color: #1a1a1a;
+  color: var(--ink);
+  background: var(--paper);
+  background-image: radial-gradient(rgb(10 10 10 / 18%) 0.6px, transparent 0.6px);
+  background-size: 14px 14px;
+  background-attachment: fixed;
 }
 
 main {
-  max-width: 40rem;
+  max-width: 56rem;
   margin: 0 auto;
 }
 
 a {
-  color: #0b5fff;
+  color: var(--ink);
+  text-decoration-thickness: 0.15rem;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 5vw, 3rem);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-block-end: 0.5rem;
+}
+
+[data-testid="task"],
+[data-testid="disclaimer"] {
+  font-family: var(--font-body);
+  max-width: 42rem;
+}
+
+[data-testid="disclaimer"] {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+/* Comic panels */
+.panel {
+  position: relative;
+  background: var(--paper);
+  border: var(--line-thick) solid var(--ink);
+  border-radius: 0.5rem;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  margin-block: 1.5rem;
+  box-shadow: 0.5rem 0.5rem 0 var(--ink);
+}
+
+.punchline {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 1rem;
+  text-shadow: 0.12em 0.12em 0 var(--paper), 0.14em 0.14em 0 var(--ink);
+}
+
+/* The shaft is the dominant illustration: a cutaway building facade. */
+[data-testid="predicting"],
+[data-testid="running"],
+.result-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.shaft-col {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.content-col {
+  min-width: 0;
+  max-inline-size: 24rem;
+  margin-inline: auto;
+}
+
+[data-testid="predicting"] .content-col,
+[data-testid="running"] .content-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+[data-testid="predicting"] label {
+  font-weight: 600;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--ink);
+  block-size: 2rem;
+}
+
+[data-testid="percentage-value"],
+[data-testid="running-position"],
+[data-testid="running-velocity"],
+dd {
+  font-family: var(--font-numeric);
+}
+
+.running-cue {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.comic-button {
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--line-thick) solid var(--ink);
+  border-radius: 2rem;
+  padding: 0.5rem 1.5rem;
+  min-block-size: 2.75rem;
+  cursor: pointer;
+  box-shadow: 0.3rem 0.3rem 0 var(--ink);
+}
+
+.comic-button:active {
+  box-shadow: 0.1rem 0.1rem 0 var(--ink);
+  transform: translate(0.2rem, 0.2rem);
+}
+
+.comic-button:focus-visible,
+input[type="range"]:focus-visible,
+[data-testid="result"]:focus-visible {
+  outline: var(--line-thick) solid var(--ink);
+  outline-offset: 0.2rem;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 1rem 0;
+}
+
+dl div {
+  display: contents;
+}
+
+dt {
+  font-weight: 600;
 }
 
 .shaft {
   position: relative;
-  block-size: 20rem;
-  max-block-size: 60vh;
-  inline-size: 4rem;
-  margin-block-start: 1rem;
-  background: #fff;
-  border: 1px solid #1a1a1a;
+  block-size: clamp(15rem, 44vh, 24rem);
+  inline-size: min(100%, 20rem);
+  background: var(--paper);
+  background-image: repeating-linear-gradient(
+    to top,
+    rgb(10 10 10 / 30%) 0 0.09rem,
+    transparent 0.09rem 20%
+  );
+  border: var(--line-thick) solid var(--ink);
+  border-radius: 0.25rem;
+}
+
+.shaft::before {
+  content: "";
+  position: absolute;
+  inset-block-start: -1rem;
+  inset-inline: 35%;
+  block-size: 1rem;
+  background: var(--ink);
+  border-radius: 0.2rem 0.2rem 0 0;
 }
 
 .marker,
@@ -32,12 +207,131 @@ a {
   inline-size: 100%;
 }
 
-.marker {
-  block-size: 2px;
-  background: #1a1a1a;
+.marker-target {
+  block-size: 0.6rem;
+  background: var(--ink);
+}
+
+.marker-target::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 50%;
+  inline-size: 0.1rem;
+  background: var(--paper);
+  transform: translateX(-50%);
+}
+
+.marker-target::after {
+  content: "TARGET";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0.4rem;
+  transform: translateY(-50%);
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  color: var(--paper);
+  background: var(--ink);
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.15rem;
+  white-space: nowrap;
+}
+
+.marker-braking {
+  inset-inline-start: 0.3rem;
+  inline-size: 0;
+  block-size: 0;
+  background: none;
+  border-block-start: 0.55rem solid transparent;
+  border-block-end: 0.55rem solid transparent;
+  border-inline-start: 0.9rem solid var(--ink);
+}
+
+.marker-braking::after {
+  content: "BRAKE HERE";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 1.4rem;
+  transform: translateY(-50%);
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--line-thin) solid var(--ink);
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.15rem;
+  white-space: nowrap;
 }
 
 .car {
-  block-size: 0.75rem;
-  background: #1a1a1a;
+  inset-inline-start: 50%;
+  inline-size: min(70%, 8rem);
+  block-size: 1.3rem;
+  background: var(--paper);
+  border: 0.2rem solid var(--ink);
+  transform: translateX(-50%);
+}
+
+.car::before {
+  content: "";
+  position: absolute;
+  inset-block-end: 100%;
+  inset-inline-start: 50%;
+  inline-size: 0.1rem;
+  block-size: 0.5rem;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+section[data-testid="running"]:has([data-cue="accelerating"]) .car::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline: 10%;
+  block-size: 0.9rem;
+  background-image: repeating-linear-gradient(to bottom, var(--ink) 0 0.18rem, transparent 0.18rem 0.45rem);
+  opacity: 0.8;
+}
+
+section[data-testid="running"]:has([data-cue="braking"]) .car::after {
+  content: "";
+  position: absolute;
+  inset-block-end: 100%;
+  inset-inline: 10%;
+  block-size: 0.55rem;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 0.1rem, var(--ink) 0.1rem 0.22rem);
+  opacity: 0.8;
+}
+
+.result-shaft[data-outcome="overshoot"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  block-size: 50%;
+  background-image: repeating-linear-gradient(45deg, var(--ink) 0 0.1rem, transparent 0.1rem 0.5rem);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+@media (width >= 40rem) {
+  [data-testid="predicting"],
+  [data-testid="running"],
+  .result-body {
+    grid-template-columns: minmax(14rem, 42%) 1fr;
+    gap: 2rem;
+  }
+
+  .content-col {
+    max-inline-size: 22rem;
+    margin-inline: 0;
+  }
+
+  .shaft {
+    inline-size: 100%;
+    max-inline-size: 22rem;
+    block-size: clamp(22rem, 56vh, 34rem);
+  }
 }
