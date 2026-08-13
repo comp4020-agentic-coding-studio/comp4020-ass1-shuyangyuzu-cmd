@@ -38,11 +38,26 @@ function setPercentage(jsdom: JSDOM, input: HTMLInputElement, p: number): void {
   input.dispatchEvent(new jsdom.window.Event("input", { bubbles: true }));
 }
 
+function preferReducedMotion(jsdom: JSDOM): void {
+  jsdom.window.matchMedia = ((query: string) =>
+    ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof jsdom.window.matchMedia;
+}
+
 describe("initElevatorUI — percentage display", () => {
   it("updates the visible percentage text as the range input changes", async () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     const input = required<HTMLInputElement>(jsdom.window.document, '[data-testid="percentage-input"]');
     setPercentage(jsdom, input, 62);
@@ -57,6 +72,7 @@ describe("Run", () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     required<HTMLButtonElement>(jsdom.window.document, '[data-testid="run-button"]').click();
 
@@ -76,6 +92,7 @@ describe("Run", () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     const input = required<HTMLInputElement>(jsdom.window.document, '[data-testid="percentage-input"]');
     setPercentage(jsdom, input, p);
@@ -112,6 +129,7 @@ describe("Run", () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     const input = required<HTMLInputElement>(jsdom.window.document, '[data-testid="percentage-input"]');
     setPercentage(jsdom, input, 65);
@@ -128,6 +146,7 @@ describe("Retry", () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     const predictingBeforeRun = required<HTMLElement>(jsdom.window.document, '[data-testid="predicting"]');
     const input = required<HTMLInputElement>(jsdom.window.document, '[data-testid="percentage-input"]');
@@ -150,6 +169,7 @@ describe("repeated Run -> Retry cycles", () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     for (const p of [30, 70]) {
       const input = required<HTMLInputElement>(jsdom.window.document, '[data-testid="percentage-input"]');
@@ -172,6 +192,7 @@ describe("disclaimer and formal disclosure", () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
+    preferReducedMotion(jsdom);
 
     const disclaimerBefore = required<HTMLElement>(jsdom.window.document, '[data-testid="disclaimer"]');
     expect(root.contains(disclaimerBefore)).toBe(false);

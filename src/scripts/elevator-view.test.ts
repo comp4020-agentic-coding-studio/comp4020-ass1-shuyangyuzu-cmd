@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { buildAttemptResult, DEFAULT_MODEL, type AttemptResult } from "../model/elevator";
-import { DISCLAIMER, formatNumber, resultView, type DisplayField, type ResultView } from "./elevator-view";
+import { buildAttemptResult, DEFAULT_MODEL, positionAt, switchTime, velocityAt, type AttemptResult } from "../model/elevator";
+import {
+  DISCLAIMER,
+  formatNumber,
+  resultView,
+  runningReadout,
+  type DisplayField,
+  type ResultView,
+  type RunningReadout,
+} from "./elevator-view";
 
-// Test-first slice: src/scripts/elevator-view.ts does not exist yet. See
-// INTERACTION.md "Approved novice copy" and "Display mapping and
-// formatting" for the exact strings and field shape exercised below.
+// Test-first slice: src/scripts/elevator-view.ts does not export
+// runningReadout yet. See INTERACTION.md "Approved novice copy" and
+// "Display mapping and formatting" for the exact strings and field shape
+// exercised in the resultView blocks below, and "Second UI slice — Running
+// phase, animation, and shaft visual (approved)" items 8-9 for the
+// accelerating/braking cue and position/velocity readout contract exercised
+// in the runningReadout blocks at the end of this file.
 
 const FORBIDDEN_TERMS = [
   "bang-bang",
@@ -150,5 +162,48 @@ describe("forbidden vocabulary and disclaimer", () => {
       assertNoForbiddenVocabulary(field.label);
       assertNoForbiddenVocabulary(field.value);
     }
+  });
+});
+
+// runningReadout formats what the Running phase displays on top of the
+// already-computed trajectory. It never re-derives kinematics — that is
+// proven independently in spec/elevator-trajectory.test.ts — so these tests
+// check only the formatting/labelling and the accelerating/braking cue.
+
+describe("runningReadout — position/velocity formatting", () => {
+  const model = DEFAULT_MODEL;
+  const p = 65;
+
+  it("formats position and velocity with units, matching the already-computed trajectory at t", () => {
+    const t = switchTime(model, p) * 0.5;
+    const readout: RunningReadout = runningReadout(model, p, t);
+
+    expect(readout.position).toBe(`${formatNumber(positionAt(model, p, t))} m`);
+    expect(readout.velocity).toBe(`${formatNumber(velocityAt(model, p, t))} m/s`);
+  });
+
+  it("formats the exact t=0 boundary as '0 m' and '0 m/s'", () => {
+    const readout = runningReadout(model, p, 0);
+
+    expect(readout.position).toBe("0 m");
+    expect(readout.velocity).toBe("0 m/s");
+  });
+
+  it("propagates RangeError for an out-of-domain t via the underlying trajectory functions", () => {
+    expect(() => runningReadout(model, p, -1)).toThrow(RangeError);
+  });
+});
+
+describe("runningReadout — accelerating/braking cue", () => {
+  it.each([
+    ["short", 35],
+    ["correct", 50],
+    ["overshoot", 65],
+  ] as const)("is 'accelerating' before switchTime and 'braking' from switchTime onward for %s p=%i", (_label, p) => {
+    const model = DEFAULT_MODEL;
+    const tSwitch = switchTime(model, p);
+
+    expect(runningReadout(model, p, tSwitch * 0.5).cue).toBe("accelerating");
+    expect(runningReadout(model, p, tSwitch).cue).toBe("braking");
   });
 });

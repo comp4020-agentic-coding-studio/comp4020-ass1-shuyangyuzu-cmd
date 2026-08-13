@@ -649,6 +649,11 @@ export function completeRun(state: UIState): ResultState
 
 ### Animation architecture
 
+- `visualDuration(stopTimeS: number): number` validates `stopTimeS` as finite
+  and `> 0`, throwing `RangeError` otherwise, then returns `max(0.8, 0.45 ×
+  stopTimeS)` — the exact signature and validation for "Animation pacing"'s
+  already-approved `visualDuration = max(0.8 s, 0.45 × T(p))` formula above; a
+  narrower clarification of that formula, not a new feature.
 - Wall-clock elapsed time maps linearly onto physical time:
   `physicalTimeAt(wallElapsedMs, visualDurationMs, stopTimeS)` returns
   `min(1, wallElapsedMs/visualDurationMs) × stopTimeS`. This is the only
