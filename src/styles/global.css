@@ -229,11 +229,11 @@ dt {
   inset-inline-end: 0.4rem;
   transform: translateY(-50%);
   font-family: var(--font-display);
-  font-size: 0.6rem;
+  font-size: clamp(0.7rem, 1.6vw, 0.8rem);
   letter-spacing: 0.05em;
   color: var(--paper);
   background: var(--ink);
-  padding: 0.05rem 0.35rem;
+  padding: 0.12rem 0.3rem;
   border-radius: 0.15rem;
   white-space: nowrap;
 }
@@ -255,12 +255,12 @@ dt {
   inset-inline-start: 1.4rem;
   transform: translateY(-50%);
   font-family: var(--font-display);
-  font-size: 0.6rem;
+  font-size: clamp(0.7rem, 1.6vw, 0.8rem);
   letter-spacing: 0.05em;
   color: var(--ink);
   background: var(--paper);
   border: var(--line-thin) solid var(--ink);
-  padding: 0.05rem 0.35rem;
+  padding: 0.12rem 0.3rem;
   border-radius: 0.15rem;
   white-space: nowrap;
 }
