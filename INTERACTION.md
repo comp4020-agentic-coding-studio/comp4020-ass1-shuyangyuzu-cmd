@@ -660,6 +660,16 @@ export function completeRun(state: UIState): ResultState
   clamp — an upper-bound endpoint policy absorbing `requestAnimationFrame`
   overshoot — and it is the rendering caller's own policy, never a change
   inside `positionAt`/`velocityAt` (see "Trajectory time input contract").
+- `requestAnimationFrame` timestamps are document-timeline-relative (time
+  since the page's own navigation start), not session-relative, so a Run's
+  own elapsed time is never read directly off the raw timestamp. The first
+  `requestAnimationFrame` callback fired for a Run establishes that session's
+  wall-clock origin (`sessionStartTimestamp`, set exactly once from that
+  callback's own timestamp argument) and renders the analytic sample at
+  `t=0`. Every callback after that computes `wallElapsedMs = timestamp -
+  sessionStartTimestamp`, and only this session-relative value is ever passed
+  to `physicalTimeAt` — the raw, absolute `requestAnimationFrame` timestamp is
+  never compared directly against `visualDurationMs` or any other duration.
 - `requestAnimationFrame` is used only to sample this already-solved
   trajectory for display; it never determines whether, when, or how the
   attempt resolves. The resolved `AttemptResult` was already computed by
@@ -737,8 +747,10 @@ export function completeRun(state: UIState): ResultState
 7. Driving the animation to completion reaches Result matching
    `resultView(buildAttemptResult(DEFAULT_MODEL, p))`, for one `p` per
    classification band.
-8. The visible accelerating/braking cue changes exactly at
-   `switchTime(model, p)`.
+8. The pure running readout changes from accelerating to braking exactly at
+   `switchTime(model,p)`; the DOM wiring renders the accelerating state at an
+   analytic time before the switch and the braking state at an analytic time
+   after it.
 9. For an overshoot `p`, at an analytic instant strictly between
    `crossingTime(model, p)` and `stopTime(model, p)`, Running is still
    active and the rendered position/velocity readouts show position `> H`

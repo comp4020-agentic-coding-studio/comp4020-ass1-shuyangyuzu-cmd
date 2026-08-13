@@ -186,3 +186,9 @@ says about the developer you're becoming.
   previously shown tool output. If it is too long for one response, split it
   into numbered, complete sections with explicit line ranges and no omissions
   or silent truncation.
+- When testing browser timing APIs, model their real clock origin and
+  lifecycle semantics. In particular, requestAnimationFrame timestamps belong
+  to the document timeline, not to an individual animation session; capture a
+  per-session first timestamp and subtract it before treating time as elapsed.
+  A fake clock that begins at zero is not evidence that production code
+  handles a page that has already been open.

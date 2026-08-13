@@ -97,16 +97,24 @@ type FakeRaf = {
 // new cumulative clock value as the frame timestamp — mirroring standard
 // requestAnimationFrame(timestamp) semantics.
 //
+// The fake clock deliberately starts at a non-zero document timestamp
+// (initialNow, default 10_000ms): real requestAnimationFrame timestamps are
+// document-timeline-relative, not session-relative, so a clock that begins
+// at 0 would make "time since navigation start" and "time since this Run
+// began" coincide by accident. Starting non-zero forces every animated test
+// to actually exercise the production session-origin subtraction rather
+// than being satisfied by a coincidence of the fake clock's own origin.
+//
 // lastScheduledCallback retains a reference to the most recently scheduled
 // callback independently of the cancellable queue above: capturing it into
 // a local const and invoking that const directly later proves the
 // production session-token/cancelled-flag guard itself keeps a stale
 // callback inert, rather than merely proving the fake queue no longer holds
 // an entry for it.
-function installFakeRaf(jsdom: JSDOM): FakeRaf {
+function installFakeRaf(jsdom: JSDOM, initialNow = 10_000): FakeRaf {
   let nextId = 1;
   let queue: Array<{ id: number; callback: (timestamp: number) => void }> = [];
-  let now = 0;
+  let now = initialNow;
   let lastScheduledCallback: ((timestamp: number) => void) | null = null;
 
   jsdom.window.requestAnimationFrame = ((callback: (timestamp: number) => void) => {
@@ -136,10 +144,18 @@ function installFakeRaf(jsdom: JSDOM): FakeRaf {
   };
 }
 
+// Advances by 1ms per retry, not 0ms: completion is decided by comparing a
+// session-relative wallElapsedMs (timestamp - sessionStartTimestamp) against
+// visualDurationMs, and that subtraction's floating-point result can, at a
+// large document-timeline origin, land a sub-nanosecond fraction under the
+// threshold on the frame that was "supposed" to complete it. advance(0)
+// would repeat that identical computation forever; advance(1) actually
+// moves the clock forward each retry so the comparison converges, mirroring
+// how a real next frame always carries a strictly later timestamp.
 function drainUntilResult(root: HTMLElement, raf: FakeRaf, maxExtraFrames = 10): void {
   let guard = 0;
   while (root.querySelector('[data-testid="result"]') === null && guard < maxExtraFrames) {
-    raf.advance(0);
+    raf.advance(1);
     guard++;
   }
 }
@@ -237,16 +253,71 @@ describe("Running car projection at analytic sampled instants", () => {
       return required<HTMLElement>(root, '[data-testid="car"]').style.bottom;
     }
 
+    // A non-zero fake-clock origin makes wallElapsedMs a genuine subtraction
+    // (timestamp - sessionStartTimestamp) rather than reading the raw delta
+    // straight off, so the resulting percentage can differ from the expected
+    // value by float noise on the order of 1e-13 — exactly the kind of
+    // fixed-timestep/float artefact the boundary-testing rule in CLAUDE.md
+    // warns against treating as a real discrepancy. Compare numerically with a
+    // tight tolerance instead of exact string equality; a real browser would
+    // show the same noise.
+    function expectCarPercentCloseTo(expectedPercent: number): void {
+      expect(Number.parseFloat(carPercent())).toBeCloseTo(expectedPercent, 9);
+    }
+
     raf.advance(0);
-    expect(carPercent()).toBe(`${projectToShaftPercent(0, domain)}%`);
+    expectCarPercentCloseTo(projectToShaftPercent(0, domain));
 
     raf.advance((tSwitch / tStop) * visualDurationMs);
-    expect(carPercent()).toBe(`${projectToShaftPercent(switchDistance(model, p), domain)}%`);
+    expectCarPercentCloseTo(projectToShaftPercent(switchDistance(model, p), domain));
 
     raf.advance(((tInterior - tSwitch) / tStop) * visualDurationMs);
-    expect(carPercent()).toBe(`${projectToShaftPercent(positionAt(model, p, tInterior), domain)}%`);
+    expectCarPercentCloseTo(projectToShaftPercent(positionAt(model, p, tInterior), domain));
 
     expect(root.querySelector('[data-testid="running"]')).not.toBeNull();
+  });
+});
+
+describe("Session-relative wall-clock origin on a document timeline already past visualDurationMs", () => {
+  it("renders analytic t=0 on the first frame instead of jumping to Result, when the document clock starts well beyond visualDurationMs", async () => {
+    const jsdom = await renderIndexPage();
+    const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
+    allowMotion(jsdom);
+    // The document timeline is already at 60_000ms — far beyond any
+    // visualDurationMs — before this Run's own first frame ever fires,
+    // standing in for a page that has simply been open a while. Production
+    // must treat this Run's own elapsed time as starting from that first
+    // callback's own timestamp, not from the document's navigation start.
+    const raf = installFakeRaf(jsdom, 60_000);
+    initElevatorUI(root);
+
+    const p = 80;
+    const model = DEFAULT_MODEL;
+    const input = required<HTMLInputElement>(root, '[data-testid="percentage-input"]');
+    setPercentage(jsdom, input, p);
+    required<HTMLButtonElement>(root, '[data-testid="run-button"]').click();
+
+    const domain = shaftDomain(model);
+    const tStop = stopTime(model, p);
+    const visualDurationMs = visualDuration(tStop) * 1000;
+
+    raf.advance(0);
+
+    expect(root.querySelector('[data-testid="running"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="result"]')).toBeNull();
+
+    const car = required<HTMLElement>(root, '[data-testid="car"]');
+    expect(car.style.bottom).toBe(`${projectToShaftPercent(0, domain)}%`);
+    const positionText = required<HTMLElement>(root, '[data-testid="running-position"]').textContent ?? "";
+    const velocityText = required<HTMLElement>(root, '[data-testid="running-velocity"]').textContent ?? "";
+    expect(Number.parseFloat(positionText)).toBe(0);
+    expect(Number.parseFloat(velocityText)).toBe(0);
+
+    raf.advance(visualDurationMs);
+    drainUntilResult(root, raf);
+
+    expect(root.querySelector('[data-testid="running"]')).toBeNull();
+    expect(root.querySelector('[data-testid="result"]')).not.toBeNull();
   });
 });
 
@@ -269,6 +340,7 @@ describe("Running position/velocity readouts", () => {
     const tInterior = (tCross + tStop) / 2;
     const visualDurationMs = visualDuration(tStop) * 1000;
 
+    raf.advance(0); // establishes the analytic t=0 render frame
     raf.advance((tInterior / tStop) * visualDurationMs);
 
     const positionText = required<HTMLElement>(root, '[data-testid="running-position"]').textContent ?? "";
@@ -279,7 +351,16 @@ describe("Running position/velocity readouts", () => {
 });
 
 describe("Accelerating/braking cue", () => {
-  it("shows 'accelerating' before switchTime and 'braking' from switchTime onward", async () => {
+  // Exact equality of the cue at switchTime(model,p) itself is proved
+  // against the pure runningReadout function in spec/elevator-view.test.ts,
+  // not here: reaching an analytic instant through this fake clock requires
+  // a wall-elapsed-time subtraction that carries floating-point noise, which
+  // makes exact-boundary claims unreliable at this layer (see CLAUDE.md's
+  // rule on fixed-timestep artefacts at boundaries). This test instead
+  // verifies the DOM wiring — that the rendered element actually consumes
+  // both view states — at two unambiguous analytic interior times, one
+  // strictly before switchTime and one strictly after it.
+  it("wires the accelerating cue before the switch and braking cue after it", async () => {
     const jsdom = await renderIndexPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
@@ -300,10 +381,14 @@ describe("Accelerating/braking cue", () => {
       return required<HTMLElement>(root, '[data-testid="running-cue"]').dataset.cue;
     }
 
-    raf.advance((tSwitch / 2 / tStop) * visualDurationMs);
+    const tAccelerating = tSwitch / 2;
+    const tBraking = (tSwitch + tStop) / 2;
+
+    raf.advance(0); // establishes the analytic t=0 render frame
+    raf.advance((tAccelerating / tStop) * visualDurationMs);
     expect(cue()).toBe("accelerating");
 
-    raf.advance((tSwitch / 2 / tStop) * visualDurationMs);
+    raf.advance(((tBraking - tAccelerating) / tStop) * visualDurationMs);
     expect(cue()).toBe("braking");
   });
 });
