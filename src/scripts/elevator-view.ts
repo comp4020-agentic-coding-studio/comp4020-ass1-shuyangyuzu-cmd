@@ -16,6 +16,15 @@ export type ResultView = {
 export const DISCLAIMER =
   "This is a simplified model. It treats the elevator as a single point that speeds up and slows down at a fixed rate. It ignores motor behaviour, weight, cables, comfort, and other real-world limits.";
 
+export const COPY = {
+  heading: "Bring the elevator to a stop at the target",
+  task:
+    "Choose where the elevator should start braking, then run it. The goal isn't just to reach the target — it must be completely stopped when it gets there.",
+  sliderLabel: "Start braking at this percentage of the distance to the target",
+  runButton: "Run",
+  retryButton: "Try again",
+} as const;
+
 export function formatNumber(value: number): string {
   return value.toFixed(2).replace(/\.?0+$/, "");
 }

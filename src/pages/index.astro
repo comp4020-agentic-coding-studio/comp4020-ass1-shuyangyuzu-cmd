@@ -1,20 +1,35 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { initialUIState } from "../scripts/elevator-controller";
+import { COPY, DISCLAIMER } from "../scripts/elevator-view";
 ---
 
-<Layout title="COMP4020 prototype">
+<Layout title={COPY.heading}>
   <header>
     <nav aria-label="Primary">
       <a href="./">Home</a>
     </nav>
   </header>
   <main>
-    <h1>COMP4020 prototype</h1>
-    <p data-testid="intro">
-      Replace this with your prototype. This week's brief is on the course
-      website; <code>spec/README.md</code> explains how the checks in this repo
-      relate to it.
-    </p>
+    <h1>{COPY.heading}</h1>
+    <p data-testid="task">{COPY.task}</p>
+    <div data-testid="elevator-app">
+      <section data-testid="predicting">
+        <label for="percentage-input">{COPY.sliderLabel}</label>
+        <input
+          id="percentage-input"
+          data-testid="percentage-input"
+          type="range"
+          min="1"
+          max="100"
+          step="1"
+          value={initialUIState.p}
+        />
+        <span data-testid="percentage-value">{initialUIState.p}%</span>
+        <button type="button" data-testid="run-button">{COPY.runButton}</button>
+      </section>
+    </div>
+    <p data-testid="disclaimer">{DISCLAIMER}</p>
   </main>
   <script src="../scripts/main.ts"></script>
 </Layout>
