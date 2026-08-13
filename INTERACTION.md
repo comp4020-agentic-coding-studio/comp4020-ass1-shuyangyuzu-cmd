@@ -345,6 +345,184 @@ exclusions") stays visible in the UI alongside these numbers.
   for early, at-H velocity for late, target state and minimum valid time for
   exact.
 
+## First UI slice — controller and markup contract (approved)
+
+`[Approved design decision]`
+
+Scope: Predicting and Result phases only. Running, animation, history, Reset,
+and the formal-model disclosure are not part of this contract — see "Scope
+exclusions" and the deferred-item lists elsewhere in this document; this
+section does not supersede them.
+
+### Controller state and transitions
+
+Pure, immutable: every transition returns a new state object rather than
+mutating its input.
+
+```ts
+export type PredictingState = {
+  readonly phase: "predicting"
+  readonly p: number
+  readonly result: null
+}
+
+export type ResultState = {
+  readonly phase: "result"
+  readonly p: number
+  readonly result: AttemptResult
+}
+
+export type UIState = PredictingState | ResultState
+
+export const initialUIState: PredictingState = {
+  phase: "predicting",
+  p: 35,
+  result: null,
+}
+
+export function setPercentage(state: UIState, p: number): PredictingState
+export function run(state: UIState): ResultState
+export function retry(state: UIState): PredictingState
+```
+
+The `PredictingState`/`ResultState` split makes an invalid `{phase, result}`
+pairing (e.g. `phase: "predicting"` with a non-null `result`) unrepresentable
+at the type level, not just rejected at runtime. Each public function's
+*parameter* stays the full `UIState` union, not the narrower state it
+requires — narrowing the parameter itself would make the required runtime
+phase guard untestable, since a compiling test could never construct the
+wrong-phase call the guard exists to reject. The union parameter plus a
+runtime `state.phase` check is what makes both guarantees hold at once: the
+return type is exact (`PredictingState`/`ResultState`, never the union), and
+the wrong-phase call is still expressible and therefore testable.
+
+- `setPercentage(state: UIState, p: number): PredictingState` — checks
+  `state.phase` at runtime; valid only when it is `"predicting"`. Once
+  confirmed, validates `p` against the existing percentage contract
+  (`assertValidPercentage`, "Model API input contract"), which throws
+  `RangeError` on an invalid `p`. Called with a `ResultState`, it throws an
+  `Error` naming the rejected transition (e.g. `setPercentage is not valid
+  in phase "result"`) — never `RangeError`, which stays reserved for
+  invalid *values*, checked only after the phase itself is confirmed valid.
+  A disabled DOM control is not treated as sufficient enforcement of this
+  rule; the controller enforces it independently of whatever the UI happens
+  to render.
+- `run(state: UIState): ResultState` — checks `state.phase` at runtime;
+  valid only when it is `"predicting"`. Snapshots the current `p`, computes
+  `buildAttemptResult(DEFAULT_MODEL, p)`, and returns a `ResultState`.
+  Called with a `ResultState`, it throws an `Error` naming the rejected
+  transition.
+- `retry(state: UIState): PredictingState` — checks `state.phase` at
+  runtime; valid only when it is `"result"`. Returns a `PredictingState`
+  with `p: state.p` — exactly what was last run, never reset to `35` or any
+  other fixed default. Called with a `PredictingState`, it throws an
+  `Error` naming the rejected transition.
+- Phase-transition errors are always `Error`, never `RangeError`:
+  `RangeError` is reserved for the percentage-value contract above, and a
+  wrong-phase call is a caller programming error, not an out-of-range
+  value. Every thrown message identifies which transition was rejected and
+  from which phase. None of these invalid calls silently no-ops.
+
+### State-dependent markup
+
+- **Predicting** renders the range control (labelled, `min=1 max=100
+  step=1`) and the Run button.
+- **Result** renders the completed result (classification label, shared and
+  category-specific fields, explanation sentence) and the Try again button.
+- These two phases' markup is mutually exclusive — Retry is never rendered
+  in Predicting, not even disabled; it does not exist in the DOM until the
+  first Result. Likewise, the Run button does not exist once Result's
+  markup replaces Predicting's.
+- After **Run**, focus moves to the Result section — not left on the Run
+  button, which has just been removed from the DOM along with the rest of
+  Predicting's markup. No focus destination is ever an element that was
+  just removed.
+- After **Retry**, focus moves to the range input, which is back in the DOM
+  once Predicting's markup replaces Result's.
+- Component tests verify these two programmatic focus destinations
+  directly (`document.activeElement` after each transition); real
+  screen-reader announcement behaviour stays a browser-level/manual check
+  (see "Browser-level and manual checks" in Acceptance criteria).
+
+### Result region semantics
+
+- A semantic `<section>` — not a generic `<div>` — carrying
+  `tabindex="-1"`, `aria-live="polite"`, and `aria-atomic="true"`.
+  `tabindex="-1"` makes the section a valid programmatic focus target (see
+  "State-dependent markup" above) without adding it to the regular Tab
+  order. `aria-atomic="true"` ensures assistive tech re-reads the whole
+  region on a change, so the classification label, the explanation, and
+  the fields are announced together as one Result, not as disconnected
+  fragments.
+- No `role="status"` on this section: it would override the section's own
+  role and heading structure rather than add to it, and `aria-live`/
+  `aria-atomic` alone are enough to drive the announcement.
+- The slider's current-value text stays a plain `<span>` — the native range
+  input already exposes its own value to assistive tech on every change, so
+  a second live announcement there would be redundant. Only the Result
+  section is a live region, and its content changes only on Run, never on a
+  slider `input` event — so dragging the slider stays silent.
+
+### Approved novice copy
+
+- Heading: "Bring the elevator to a stop at the target"
+- Task: "Choose where the elevator should start braking, then run it. The
+  goal isn't just to reach the target — it must be completely stopped when
+  it gets there."
+- Slider label: "Start braking at this percentage of the distance to the
+  target"
+- Run button: "Run"
+- Retry button: "Try again"
+- Classification labels: `short` → "Too early"; `correct` → "Exactly
+  right"; `overshoot` → "Too late"
+- Explanations:
+  - `short`: "Braking started too early. The elevator stopped at rest, but
+    before the target. Move the braking point higher and try again."
+  - `correct`: "The elevator reached the target exactly as its velocity
+    reached zero. This is the fastest valid journey."
+  - `overshoot`: "The elevator reached the target while it was still
+    moving, so it stopped beyond it. Move the braking point lower and try
+    again."
+- Disclaimer: "This is a simplified model. It treats the elevator as a
+  single point that speeds up and slows down at a fixed rate. It ignores
+  motor behaviour, weight, cables, comfort, and other real-world limits."
+
+None of this copy uses the forbidden vocabulary in "Audience and progressive
+disclosure," and no view in this slice ever renders the raw internal
+`classification` string (`"short"`/`"correct"`/`"overshoot"`) — only the
+mapped labels above.
+
+### Display mapping and formatting
+
+- Shared, every Result: the locked percentage; the classification label
+  above; final position and final velocity shown together; physical
+  elapsed time.
+- Category-specific: `short` → shortfall; `correct` → a minimum-valid-time
+  message that names the elapsed-time figure as the minimum rather than
+  printing a second number equal to it; `overshoot` → velocity at target.
+  `targetCrossingTime` is computed by `buildAttemptResult` but is not
+  displayed anywhere in this slice.
+- All numbers carry explicit SI units (`m`, `s`, `m/s`).
+- Numbers are formatted to at most two decimal places with trailing
+  zeroes trimmed (`5` not `5.00`, `4.32` not `4.320`, `3.9` not `3.90`).
+
+### Testing tiers for this slice
+
+- Pure controller and pure view-mapping tests may be co-located under
+  `src/scripts/`; DOM/interaction tests for this slice live under `spec/`.
+- Controller tests cover every invalid transition listed above (not only
+  the valid ones) — `setPercentage`/`run` called on a `ResultState`, `retry`
+  called on a `PredictingState` — asserting each throws `Error` (not
+  `RangeError`) with a message naming the rejected transition; the
+  percentage-value contract's own `RangeError` cases are tested separately.
+- DOM tests assert Predicting never renders a Retry button (absent, not
+  disabled) and Result always does, and that `document.activeElement` is
+  the Result section after Run and the range input after Retry.
+- jsdom-based tests verify wiring only, including those two focus
+  destinations — they are not evidence of real pointer, touch, Tab-order,
+  screen-reader announcement, or novice-comprehension behaviour; those
+  remain the browser-level/manual checks below.
+
 ## Animation pacing
 
 `visualDuration = max(0.8 s, 0.45 × T(p))` — a floor only, no upper clamp.
@@ -456,6 +634,49 @@ claimed to.
 
 None of these three checks is evidence that the copy is actually clear to a
 novice — only that the structural gating and vocabulary boundary hold.
+
+### First UI slice component tests (Predicting/Result only)
+
+`[Approved design decision]` for every item below, extending "First UI slice
+— controller and markup contract."
+
+- Initial controller state is exactly
+  `{ phase: "predicting", p: 35, result: null }`, typed as `PredictingState`.
+- `setPercentage` validates `p` via the existing percentage contract
+  (`RangeError` on an invalid value) and succeeds only on a
+  `PredictingState`; invoked on a `ResultState`, it throws `Error` (never
+  `RangeError`) naming the rejected transition.
+- `run` succeeds only on a `PredictingState`, snapshots `p`, and returns a
+  `ResultState` built from `buildAttemptResult`; invoked on a `ResultState`,
+  it throws `Error` naming the rejected transition.
+- `retry` succeeds only on a `ResultState` and returns a `PredictingState`
+  with `p` unchanged from what was run; invoked on a `PredictingState`, it
+  throws `Error` naming the rejected transition.
+- `PredictingState`/`ResultState` are a discriminated union: no value of
+  type `UIState` can have `phase: "predicting"` with a non-null `result`,
+  or `phase: "result"` with a `null` result.
+- Predicting renders the range control and Run button; Result renders the
+  completed result and Try again button; Retry is never rendered before the
+  first Run, and the Run button does not exist once Result renders.
+- After Run, focus moves to the Result section (never left on the removed
+  Run button); after Retry, focus moves to the range input. Both are
+  verified as `document.activeElement` in component tests; real
+  screen-reader announcement behaviour remains a browser-level/manual
+  check.
+- The Result section is a `<section>` with `tabindex="-1"`,
+  `aria-live="polite"`, and `aria-atomic="true"`, without `role="status"`;
+  its content — and therefore its announcement — changes only on Run,
+  never on a slider input event.
+- Every Result renders the approved plain-language label and explanation
+  text, never the raw `classification` enum value.
+- Displayed numbers carry explicit SI units and at most two decimal places
+  with trailing zeroes trimmed.
+- `overshoot` results never render `targetCrossingTime`.
+
+These checks verify wiring against a constructed document, per "Testing
+tiers for this slice" above — they are not evidence of real pointer, touch,
+Tab-order, screen-reader, or novice-comprehension behaviour, which remain
+the browser-level and manual checks below.
 
 ### Browser-level and manual checks (not exercisable by unit/component tests)
 
