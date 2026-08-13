@@ -611,6 +611,151 @@ quantities and units"), never this scaled playback duration — scaling
 changes only how long the animation takes to draw, never what number is
 shown.
 
+## Second UI slice — Running phase, animation, and shaft visual (approved)
+
+`[Approved design decision]`
+
+Extends "State machine and visible outcomes," "Animation pacing," and "Input,
+history, and responsive behaviour" above with the controller, animation, and
+coordinate-system contract for this slice's implementation.
+
+### Controller extension
+
+```ts
+export type RunningState = {
+  readonly phase: "running"
+  readonly p: number
+  readonly result: AttemptResult
+}
+
+export type UIState = PredictingState | RunningState | ResultState
+
+export function run(state: UIState): RunningState
+export function completeRun(state: UIState): ResultState
+```
+
+- `run` now transitions `Predicting → Running` (superseding the narrower
+  "First UI slice" contract's `Predicting → Result`, which explicitly scoped
+  itself to "Predicting and Result phases only"). It locks `p` and computes
+  `buildAttemptResult(DEFAULT_MODEL, p)` into `RunningState.result` up front,
+  matching "Running: entered by locking the selected p and computing the
+  full trajectory and event times up front."
+- `completeRun(state: UIState): ResultState` transitions `Running → Result`,
+  forwarding the already-computed `result` unchanged. Called on `Predicting`
+  or `Result`, it throws `Error` naming the rejected transition, matching the
+  existing wrong-phase-throws pattern.
+- `retry` and `setPercentage`'s existing guards are unchanged; calling either
+  on a `RunningState` throws `Error` naming the rejection.
+
+### Animation architecture
+
+- Wall-clock elapsed time maps linearly onto physical time:
+  `physicalTimeAt(wallElapsedMs, visualDurationMs, stopTimeS)` returns
+  `min(1, wallElapsedMs/visualDurationMs) × stopTimeS`. This is the only
+  clamp — an upper-bound endpoint policy absorbing `requestAnimationFrame`
+  overshoot — and it is the rendering caller's own policy, never a change
+  inside `positionAt`/`velocityAt` (see "Trajectory time input contract").
+- `requestAnimationFrame` is used only to sample this already-solved
+  trajectory for display; it never determines whether, when, or how the
+  attempt resolves. The resolved `AttemptResult` was already computed by
+  `run()` before the first frame runs.
+- `matchMedia` and `requestAnimationFrame`/`cancelAnimationFrame` are obtained
+  from `root.ownerDocument.defaultView`, never an ambient global `window`.
+- Each Run starts a session token. A `cancelAnimationFrame` call and the
+  session's own cancelled flag together guarantee that once Result is
+  reached, no further scheduled frame can mutate Running markup or call
+  `completeRun` a second time — including a callback still queued at the
+  moment cancellation happens.
+- Under `prefers-reduced-motion: reduce` (read once via `matchMedia` at Run
+  time), the Running phase's DOM subtree is never created at all — Predicting
+  detaches directly into Result, calling `completeRun` synchronously with no
+  frame ever scheduled.
+- The animation stores only physical model state (locked `p`, sampled
+  physical time) — never a pixel value. Car and marker screen positions are
+  recomputed from that physical state as CSS percentages on every sampled
+  frame, so a container resize is handled by ordinary CSS layout with no
+  listener, no measurement, and no reprojection code. Verifying this in a
+  real resized browser window is a manual/browser check, not an automated
+  one (see "Real-page test infrastructure").
+
+### Shaft visual and coordinate system
+
+- The shaft's visual domain is fixed at `[0, 2H]` in both Predicting and
+  Running — never rescaled to a locked `p`'s own extent. `2H` is already the
+  model's own upper bound (`x_stop(100) = 2H`, "Model constants and units").
+- The target `H` sits at the exact visual midpoint of this fixed domain in
+  every phase and for every `p`.
+- `[0, H]` is the target-journey region; `(H, 2H]` is the overshoot region,
+  distinguished by the existing target-marker element at their boundary.
+- The braking marker (Predicting and Running) projects `switchDistance(model,
+  p)`; the car (Running only) projects the live `positionAt(model, p,
+  clampedT)`. Both use `projectToShaftPercent(position, extent)` with
+  `extent = shaftDomain(model) = 2 × model.H`, fixed for the whole slice. The
+  returned percentage is applied as a CSS bottom percentage: 0 m is the
+  shaft bottom, H is 50%, and 2H is the shaft top. The shaft element has a
+  definite block size and establishes a positioning context
+  (`src/styles/global.css`) — structural geometry only; typography, colour,
+  and final responsive polish are deferred.
+- Predicting's shaft, target marker, car, and braking marker share the same
+  `data-testid`s with Running's — never both live at once, matching the
+  existing mutual-exclusivity rule in "DOM wiring and lifecycle" above.
+- While Running, the percentage input, Run button, and Retry button are all
+  absent from `[data-testid="elevator-app"]` (Predicting is detached, and
+  Result/Retry do not yet exist). Permanent navigation outside the phase
+  root is unaffected and remains present throughout.
+
+### Running-phase and animation tests (this slice)
+
+`[Approved design decision]` for every item below, extending "Second UI slice
+— Running phase, animation, and shaft visual" above.
+
+1. `run` locks `p` and returns a `RunningState` whose `result` already
+   equals `buildAttemptResult(DEFAULT_MODEL, p)`; `completeRun` on that
+   state returns a `ResultState` carrying the identical `result`.
+2. `run`/`completeRun`/`retry` each throw `Error` naming the rejected
+   transition on every phase they do not accept, including `RunningState`.
+3. `visualDuration`, `physicalTimeAt`, `projectToShaftPercent`, and
+   `shaftDomain` reject non-finite or invalid-range arguments with
+   `RangeError`, without clamping any of them; the one approved clamp
+   (`wallElapsedMs` past `visualDurationMs`) is distinguished from these
+   rejections.
+4. `projectToShaftPercent` returns a value in `[0, 100]` independent of any
+   pixel or viewport dimension.
+5. The Predicting shaft, target marker, car, and braking marker render at
+   CSS percentages consistent with `projectToShaftPercent` over the fixed
+   `[0, 2H]` domain; the braking marker moves on the slider's `input` event
+   without a Run.
+6. Clicking Run (motion not reduced): Predicting is detached; inside
+   `[data-testid="elevator-app"]` there is no percentage input, Run button,
+   or Retry button while Running; the permanent navigation landmark outside
+   the phase root still exists and is unaffected.
+7. Driving the animation to completion reaches Result matching
+   `resultView(buildAttemptResult(DEFAULT_MODEL, p))`, for one `p` per
+   classification band.
+8. The visible accelerating/braking cue changes exactly at
+   `switchTime(model, p)`.
+9. For an overshoot `p`, at an analytic instant strictly between
+   `crossingTime(model, p)` and `stopTime(model, p)`, Running is still
+   active and the rendered position/velocity readouts show position `> H`
+   and velocity `> 0`. Car projection during Running is checked at `t=0`,
+   `switchTime`, and this interior instant only — not at `stopTime`, since
+   the completion frame transitions immediately to Result and detaches
+   Running; `stopTime` exactness stays with the pure trajectory/model tests
+   above, and DOM completion is verified through the resulting Result view
+   (item 7).
+10. With `matchMedia` stubbed to `matches: true`, Run reaches Result
+    synchronously with zero `requestAnimationFrame` calls and content
+    identical to the animated path.
+11. After Result, any stale queued animation callback does not mutate
+    Result or create a second one.
+12. No element introduced by this slice contains forbidden vocabulary from
+    "Audience and progressive disclosure."
+
+Real-browser mid-run resize (percentage-positioned car adapting without
+restart, `p` change, or outcome change) is a manual/browser check at both
+marking viewports, not an automated DOM test — see "Real-page test
+infrastructure."
+
 ## Acceptance criteria
 
 Each item is tagged `[Published spec]` (with the supporting quote),
@@ -805,6 +950,13 @@ behaviour, which remain the browser-level and manual checks below.
   not itself named by the published brief.
 - Resizing an open browser window mid-run.
   `[Published spec]` — "a resize mid-interaction" / "resizes mid-use."
+- The percentage-positioned car and markers (see "Shaft visual and
+  coordinate system") visibly adapt to a real mid-run resize at both
+  marking viewports, without restarting, changing `p`, or changing the
+  eventual Result.
+  `[Approved design decision]` — the CSS-percentage projection itself is
+  new to this slice; the resize behaviour it must satisfy is the
+  `[Published spec]` item above.
 - Both marking viewports render and operate correctly at 1920×1080 and
   390×844.
   `[Published spec]` for "both marking viewports (desktop and phone)";
