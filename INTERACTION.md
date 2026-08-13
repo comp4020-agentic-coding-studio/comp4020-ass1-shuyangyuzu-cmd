@@ -523,6 +523,82 @@ mapped labels above.
   screen-reader announcement, or novice-comprehension behaviour; those
   remain the browser-level/manual checks below.
 
+### DOM wiring and lifecycle (approved)
+
+`[Approved design decision]`
+
+Extends "State-dependent markup" above with the exact DOM lifecycle for this
+slice's implementation, resolving how Retry's markup is produced.
+
+- The server-rendered page contains exactly one Predicting subtree,
+  authored once in the page markup — there is no second, JS-side Predicting
+  builder. `initElevatorUI(root)` finds and retains that single
+  server-rendered element; it is never destroyed and rebuilt.
+- On **Run**: the retained Predicting element is detached from the live DOM
+  (not destroyed — kept in a closure reference) and replaced with a
+  newly-created Result section, built via `document.createElement`/
+  `textContent` from the committed controller's `ResultState` and
+  `resultView()` output. While Result is active, neither the Predicting
+  element nor the Run button exists anywhere in the live DOM (detached, not
+  merely hidden).
+- On **Retry**: the Result section is removed from the live DOM and
+  discarded — Result markup is always freshly built on the next Run, never
+  retained. The retained Predicting element's range input value (and its
+  visible percentage text) is updated to the preserved `p`, and that same
+  retained element is reattached to the mount root.
+- "Recreated" in "State-dependent markup" above means restored as the
+  active phase in the live DOM — not necessarily allocated as a new
+  `HTMLElement`. Detach-and-reattach of the one retained node satisfies
+  live-DOM mutual exclusivity identically to a rebuild, without a second
+  Predicting-markup source to keep in sync.
+- Event listeners are attached to the retained Predicting element and to
+  each freshly-built Result section exactly once, at construction/retention
+  time, and must remain correct across any number of repeated Run → Retry
+  cycles — a second Run after a Retry must lock the newly-set `p`, not a
+  stale value from the first cycle.
+- The mount root (a single element, e.g. `[data-testid="elevator-app"]`)
+  holds exactly one active phase subtree at any time: the retained
+  Predicting element while Predicting, or a freshly-built Result section
+  while Result — never both, never neither, once `initElevatorUI` has run.
+- The page's header/navigation (already required by the starter invariants
+  in `spec/invariants.test.ts`), the approved heading and task copy, and
+  the disclaimer all live **outside** the phase mount root, so they are
+  never affected by a Run/Retry transition and never need to be duplicated
+  inside either phase's subtree.
+- Result markup uses only DOM construction and `textContent` — never
+  `innerHTML` built from a dynamic value.
+- A single `COPY` object, exported from `elevator-view.ts` alongside the
+  already-approved `DISCLAIMER` and `resultView`, is the one source for the
+  Predicting-phase heading/task/slider-label/Run-button/Retry-button
+  strings — the server-rendered markup and any test asserting against that
+  copy import `COPY` rather than restating the strings.
+- `spec/starter.test.ts`, which describes the now-superseded starter page,
+  is deleted when this slice's real-page test replaces it; the starter's
+  `data-testid="intro"` attribute is not retained merely to keep that
+  obsolete test green.
+
+### Real-page test infrastructure (approved)
+
+`[Approved design decision]`
+
+- DOM/interaction tests for this slice render the real `src/pages/index.astro`
+  through Astro's installed Container API (`experimental_AstroContainer`,
+  from `astro/container`) rather than a hand-written HTML fixture, then
+  parse the rendered HTML with `JSDOM` for querying/assertions.
+- This requires a `vitest.config.ts` built on Astro's installed
+  `getViteConfig()` (from `astro/config`) so `.astro` imports transform
+  correctly inside test files. No new package dependency is added — both
+  `astro/container` and `astro/config` are exports of the already-installed
+  `astro` package.
+- Because this configuration change affects how every existing test file is
+  transformed, it is added as its own step, isolated from any UI test or
+  page change: propose the exact config, add it alone, run the full
+  existing committed suite unchanged against it, and commit it separately —
+  only if every existing test still passes with no test file edited.
+- Tests call `initElevatorUI(root)` directly against the root element found
+  in the rendered document, rather than relying on jsdom to execute the
+  compiled/bundled `main.ts` module script.
+
 ## Animation pacing
 
 `visualDuration = max(0.8 s, 0.45 × T(p))` — a floor only, no upper clamp.
@@ -673,10 +749,52 @@ novice — only that the structural gating and vocabulary boundary hold.
   with trailing zeroes trimmed.
 - `overshoot` results never render `targetCrossingTime`.
 
-These checks verify wiring against a constructed document, per "Testing
-tiers for this slice" above — they are not evidence of real pointer, touch,
-Tab-order, screen-reader, or novice-comprehension behaviour, which remain
-the browser-level and manual checks below.
+### DOM/Astro red-test scope (this slice)
+
+`[Approved design decision]` for every item below, extending "First UI
+slice component tests" with the Astro Container rendering strategy and the
+retained-node lifecycle in "DOM wiring and lifecycle" above.
+
+1. The real `index.astro`, rendered through Astro Container and parsed with
+   JSDOM, retains the starter invariants' navigation landmark and exactly
+   one `<h1>`, and its Predicting subtree exists with no Result markup
+   present anywhere in the document.
+2. The range input carries `min="1" max="100" step="1"` and the initial
+   value from `initialUIState.p`, with a real associated label using the
+   approved slider-label text from `COPY`.
+3. The disclaimer element's text equals the exported `DISCLAIMER` constant
+   exactly, before any interaction.
+4. After calling `initElevatorUI(root)` and clicking Run: the Predicting
+   element is detached from the live DOM (not merely hidden), a Result
+   section exists with `tabindex="-1"`, `aria-live="polite"`,
+   `aria-atomic="true"`, no `role="status"`, and `document.activeElement`
+   is that section.
+5. The rendered Result heading, explanation, and fields for a given `p`
+   match the committed `resultView(buildAttemptResult(DEFAULT_MODEL, p))`
+   output used as the expected view mapping. This verifies that the DOM
+   wiring consumes the approved pure view model without retyping or
+   re-deriving its numbers and strings; it is a consistency check, not
+   independent evidence that the view mapping itself is correct.
+6. `overshoot` results render no element identified by
+   `data-field="targetCrossingTime"`; elapsed time is identified by
+   `data-field="elapsedTime"`, not by searching rendered text for a
+   repeated numeric string.
+7. Clicking Retry removes the Result section, reattaches the retained
+   Predicting element with its range value updated to the preserved `p`
+   (not reset to any default), and moves focus to that range input.
+8. At least two consecutive Run → Retry cycles are exercised in one test,
+   each locking and preserving its own distinct `p`, to prove the retained
+   node's listeners remain correct after repeated detach/reattach — not
+   only on the first cycle.
+9. No formal-model disclosure element exists anywhere in the rendered
+   document at any point in this slice, and the disclaimer text is
+   unchanged and still present after both a Run and a Retry.
+
+These checks verify wiring against the real rendered page (via Astro
+Container, parsed with JSDOM), per "Testing tiers for this slice" and
+"Real-page test infrastructure" above — they are not evidence of real
+pointer, touch, Tab-order, screen-reader, or novice-comprehension
+behaviour, which remain the browser-level and manual checks below.
 
 ### Browser-level and manual checks (not exercisable by unit/component tests)
 
