@@ -1,4 +1,4 @@
-import type { AttemptResult } from "../model/elevator";
+import { positionAt, switchTime, velocityAt, type AttemptResult, type Model } from "../model/elevator";
 
 export type DisplayField = {
   readonly key: string;
@@ -88,5 +88,22 @@ export function resultView(result: AttemptResult): ResultView {
         value: `${formatNumber(result.velocityAtTarget)} m/s`,
       },
     ],
+  };
+}
+
+export type RunningReadout = {
+  readonly position: string;
+  readonly velocity: string;
+  readonly cue: "accelerating" | "braking";
+};
+
+export function runningReadout(model: Model, p: number, t: number): RunningReadout {
+  const position = positionAt(model, p, t);
+  const velocity = velocityAt(model, p, t);
+  const cue = t < switchTime(model, p) ? "accelerating" : "braking";
+  return {
+    position: `${formatNumber(position)} m`,
+    velocity: `${formatNumber(velocity)} m/s`,
+    cue,
   };
 }

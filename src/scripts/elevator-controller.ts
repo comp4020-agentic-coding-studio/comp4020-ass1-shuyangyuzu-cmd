@@ -6,13 +6,19 @@ export type PredictingState = {
   readonly result: null;
 };
 
+export type RunningState = {
+  readonly phase: "running";
+  readonly p: number;
+  readonly result: AttemptResult;
+};
+
 export type ResultState = {
   readonly phase: "result";
   readonly p: number;
   readonly result: AttemptResult;
 };
 
-export type UIState = PredictingState | ResultState;
+export type UIState = PredictingState | RunningState | ResultState;
 
 export const initialUIState: PredictingState = {
   phase: "predicting",
@@ -28,12 +34,19 @@ export function setPercentage(state: UIState, p: number): PredictingState {
   return { phase: "predicting", p, result: null };
 }
 
-export function run(state: UIState): ResultState {
+export function run(state: UIState): RunningState {
   if (state.phase !== "predicting") {
     throw new Error(`run is not valid in phase "${state.phase}"`);
   }
   const { p } = state;
-  return { phase: "result", p, result: buildAttemptResult(DEFAULT_MODEL, p) };
+  return { phase: "running", p, result: buildAttemptResult(DEFAULT_MODEL, p) };
+}
+
+export function completeRun(state: UIState): ResultState {
+  if (state.phase !== "running") {
+    throw new Error(`completeRun is not valid in phase "${state.phase}"`);
+  }
+  return { phase: "result", p: state.p, result: state.result };
 }
 
 export function retry(state: UIState): PredictingState {

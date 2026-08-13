@@ -14,3 +14,30 @@ main {
 a {
   color: #0b5fff;
 }
+
+.shaft {
+  position: relative;
+  block-size: 20rem;
+  max-block-size: 60vh;
+  inline-size: 4rem;
+  margin-block-start: 1rem;
+  background: #fff;
+  border: 1px solid #1a1a1a;
+}
+
+.marker,
+.car {
+  position: absolute;
+  inset-inline-start: 0;
+  inline-size: 100%;
+}
+
+.marker {
+  block-size: 2px;
+  background: #1a1a1a;
+}
+
+.car {
+  block-size: 0.75rem;
+  background: #1a1a1a;
+}

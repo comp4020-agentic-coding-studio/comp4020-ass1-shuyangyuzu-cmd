@@ -1,7 +1,14 @@
 ---
+import { DEFAULT_MODEL, switchDistance } from "../model/elevator";
+import { projectToShaftPercent, shaftDomain } from "../scripts/elevator-animation";
 import Layout from "../layouts/Layout.astro";
 import { initialUIState } from "../scripts/elevator-controller";
 import { COPY, DISCLAIMER } from "../scripts/elevator-view";
+
+const shaftExtent = shaftDomain(DEFAULT_MODEL);
+const targetPercent = projectToShaftPercent(DEFAULT_MODEL.H, shaftExtent);
+const carPercent = projectToShaftPercent(0, shaftExtent);
+const brakingPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, initialUIState.p), shaftExtent);
 ---
 
 <Layout title={COPY.heading}>
@@ -27,6 +34,13 @@ import { COPY, DISCLAIMER } from "../scripts/elevator-view";
         />
         <span data-testid="percentage-value">{initialUIState.p}%</span>
         <button type="button" data-testid="run-button">{COPY.runButton}</button>
+        <div data-testid="shaft" class="shaft">
+          <div data-testid="target-marker" class="marker marker-target" style={`bottom: ${targetPercent}%;`}>
+          </div>
+          <div data-testid="braking-marker" class="marker marker-braking" style={`bottom: ${brakingPercent}%;`}>
+          </div>
+          <div data-testid="car" class="car" style={`bottom: ${carPercent}%;`}></div>
+        </div>
       </section>
     </div>
     <p data-testid="disclaimer">{DISCLAIMER}</p>
