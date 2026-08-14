@@ -773,6 +773,247 @@ restart, `p` change, or outcome change) is a manual/browser check at both
 marking viewports, not an automated DOM test — see "Real-page test
 infrastructure."
 
+## Third UI slice — Hint and Reveal (approved)
+
+`[Approved design decision]`
+
+Extends "State-dependent markup," "Shaft visual and coordinate system," and
+"DOM wiring and lifecycle" above with an optional, opt-in hint path available
+only during Predicting on the Beginner mode of Play. This is separate from,
+and unlocked independently of, the formal-model disclosure in "Audience and
+progressive disclosure" — a visitor can request the hint without ever opening
+the formal disclosure, and vice versa.
+
+### Purpose and shape
+
+Two sequential, visitor-triggered reveals, never automatic:
+
+1. A **conceptual hint** — plain language, no number — reminding the visitor
+   that arrival requires zero velocity, not just reaching the position.
+2. A **fastest-valid-braking-point reveal** — the actual switching percentage
+   (`50%` for Beginner) as a number and as a second shaft marker, requested
+   only after the conceptual hint, never shown first or automatically.
+
+Both stay inside Predicting's subtree: they are irrelevant once Running starts
+and are covered by Result's own hint-comparison fields instead (see "Result
+hint comparison" below), so they detach along with the rest of Predicting on
+Run, exactly like the existing Run button and range input.
+
+### Hint state module (`src/scripts/elevator-hint.ts`, new)
+
+Pure, immutable, mirroring the existing controller's phase-guarded-transition
+pattern in "First UI slice — controller and markup contract":
+
+```ts
+export type HintPhase = "hidden" | "conceptual" | "revealed"
+
+export type HintState = {
+  readonly phase: HintPhase
+}
+
+export const initialHintState: HintState = { phase: "hidden" }
+
+export function showConceptualHint(state: HintState): HintState
+export function revealFastestValid(state: HintState): HintState
+export function resetHint(): HintState
+```
+
+- `showConceptualHint(state)` — valid only when `state.phase === "hidden"`;
+  returns `{ phase: "conceptual" }`. Called on `"conceptual"` or `"revealed"`,
+  throws `Error` naming the rejected transition — never `RangeError`, matching
+  the existing phase-vs-value error convention.
+- `revealFastestValid(state)` — valid only when `state.phase === "conceptual"`;
+  returns `{ phase: "revealed" }`. Called on `"hidden"` or `"revealed"`, throws
+  `Error` naming the rejected transition. This enforces that the fastest-valid
+  reveal can never be reached without the conceptual hint having been shown
+  first.
+- `resetHint()` — takes no state argument and unconditionally returns
+  `initialHintState`. Unlike the two transitions above, this is not a guarded
+  transition on an existing state — every hint phase resets the same way, so
+  there is nothing to validate. It exists to make the Retry-reset policy below
+  a single named call rather than an inline object literal at each call site.
+
+### Fastest-valid comparison (`buildHintComparison`, same module)
+
+A second pure function, reusable by Advanced in a later slice with a
+different `fastestValidP`:
+
+```ts
+export const BEGINNER_FASTEST_VALID_P = 50
+
+export type HintComparison = {
+  readonly yourBrake: number
+  readonly fastestValid: number
+  readonly differenceLabel: string
+  readonly matches: boolean
+}
+
+export function buildHintComparison(p: number, fastestValidP: number): HintComparison
+```
+
+- Validates `p` with the existing `assertValidPercentage` (from
+  `src/model/elevator.ts`) — finite integer, `1…100` — throwing `RangeError`
+  on an invalid value, no silent clamping, matching every other exported
+  function in this document.
+- Validates `fastestValidP` as finite and within `0…100` inclusive, throwing
+  `RangeError` otherwise. It is **not** constrained to an integer here: for
+  Beginner it is always the integer `50` (`BEGINNER_FASTEST_VALID_P`), but the
+  parameter itself stays a general `number` so this function needs no change
+  when Advanced's own `p* = 100b/(a+b)` (generally non-integer) is plugged in
+  during Slice 5 — Advanced's own rounding/tolerance/"snap" policy is a
+  separate, later decision (see Slice 4 in the saved migration plan) and is
+  not resolved by this function.
+- `matches = p === fastestValidP` — exact equality, no epsilon. For Beginner
+  both operands are always integers, so this is exact by construction, the
+  same reasoning already used for `classify`'s own `p===50` exact boundary
+  (see "Exact boundary-event policy"). This exactness claim is specific to
+  Beginner's integer inputs; it is not assumed to extend unchanged to
+  Advanced's non-integer optimum without that separate decision.
+- `differenceLabel` is plain language, reusing `formatNumber` from
+  `elevator-view.ts` for the numeric part (no reimplementation of the
+  two-decimal-trim formatting rule):
+  - `matches === true` → `"Matches exactly"`.
+  - `p < fastestValidP` → `` `${formatNumber(fastestValidP - p)} percentage
+    points too early` ``.
+  - `p > fastestValidP` → `` `${formatNumber(p - fastestValidP)} percentage
+    points too late` ``.
+- None of this vocabulary — "too early," "too late," "matches exactly,"
+  "percentage points" — is in the forbidden list in "Audience and progressive
+  disclosure"; it reuses words already approved there.
+
+### Predicting markup extension
+
+- The server-rendered Predicting subtree in `play.astro` gains one new child,
+  a `<div data-testid="hint">`, authored once alongside the existing range
+  input and Run button — not built by JS from nothing. It initially contains
+  exactly one element:
+  - `<button type="button" data-testid="hint-button">STUCK? GET A HINT.</button>`
+- On clicking `hint-button` (`showConceptualHint`): the button is removed and
+  two elements are appended to the same `data-testid="hint"` container, built
+  via `document.createElement`/`textContent` only (never `innerHTML`):
+  - `<p data-testid="hint-conceptual" tabindex="-1">Reaching the target is
+    only half the job. What should the elevator's velocity be when it gets
+    there?</p>`
+  - `<button type="button" data-testid="reveal-button">REVEAL THE FASTEST
+    VALID BRAKING POINT</button>`
+  - Focus moves to `hint-conceptual` (`tabindex="-1"` makes it a valid
+    programmatic focus target, the same pattern already used for the Result
+    section).
+- On clicking `reveal-button` (`revealFastestValid`): the button is removed;
+  `hint-conceptual` stays in place (it remains true and useful context); one
+  new element is appended:
+  - `<p data-testid="hint-revealed" tabindex="-1">The fastest valid braking
+    point is 50% of the way to the target.</p>`
+  - and one new marker is appended to the existing Predicting shaft
+    (`data-testid="shaft"`, the same element the braking marker already lives
+    in): `<div data-testid="fastest-valid-marker" class="marker
+    marker-fastest-valid">`, positioned via the same
+    `projectToShaftPercent(switchDistance(DEFAULT_MODEL, BEGINNER_FASTEST_VALID_P),
+    SHAFT_EXTENT)` projection already used for the braking marker — no new
+    coordinate logic. Because the visitor's own braking marker uses the same
+    projection over the same fixed `p=50`, the two markers visually coincide
+    exactly when the visitor's own slider is at `50%`; this is an emergent
+    consequence of sharing one projection function, not special-cased code,
+    and is not itself asserted by name in any test.
+  - The reveal never moves the visitor's own slider value or braking marker —
+    only the new elements above are added.
+  - Focus moves to `hint-revealed`.
+- No `aria-live` on any hint element: each change is the direct, synchronous
+  result of the visitor's own click, so the focus move itself is the
+  announcement mechanism, the same reasoning already given for why the
+  slider's value span is not a live region (see "Result region semantics").
+
+### Retry-reset policy (approved)
+
+- On Retry, the hint container is restored to its initial state as part of
+  the same operation that reattaches the retained Predicting element: any
+  `hint-conceptual`/`hint-revealed` paragraphs, the `reveal-button`, and the
+  `fastest-valid-marker` are removed, and the original `hint-button` is
+  reattached as the container's only child. The DOM-level `HintState` is
+  reset via `resetHint()`.
+- Rationale: Retry represents a fresh attempt, and a visitor who used the
+  hint on one attempt should have to ask again on the next rather than see it
+  pre-revealed — this also keeps the reveal state simple to reason about,
+  since it is never carried across attempts.
+- This reset does not change Retry's already-approved focus destination:
+  focus still moves to the range input (see "State-dependent markup"), never
+  to the reset `hint-button`.
+- Because Beginner's `fastestValidP` is the fixed constant `50`, changing the
+  slider's `p` before or after a reveal never invalidates that reveal — no
+  invalidation logic is needed in this slice. (Advanced's own parameter-change
+  invalidation is a separate, later decision — see Slice 4/5 in the saved
+  migration plan.)
+
+### Result hint comparison
+
+- `buildResultSection` accepts one additional piece of information: whether
+  `HintState.phase === "revealed"` at the moment `run()` was called for this
+  attempt — snapshotted once, at Run time, exactly like the rest of the
+  attempt's state. A hint merely shown conceptually (`"conceptual"`, never
+  advanced to `"revealed"`) does **not** trigger this section — only a full
+  reveal does.
+- When revealed, Result renders one additional block, `data-testid=
+  "hint-comparison"`, built from `buildHintComparison(p, BEGINNER_FASTEST_VALID_P)`:
+  - `data-field="yourBrake"` → `` `${p}%` ``
+  - `data-field="fastestValid"` → `` `${BEGINNER_FASTEST_VALID_P}%` ``
+  - `data-field="hintDifference"` → `comparison.differenceLabel`
+- When not revealed, no element with `data-testid="hint-comparison"` exists
+  anywhere in the Result section.
+- Predicting's shaft (and therefore its two hint markers) is already detached
+  before Result is ever mounted (see "DOM wiring and lifecycle"), so "marker
+  overlap when exact" is necessarily expressed as the `"Matches exactly"` text
+  above, not as a literal pair of overlapping marker elements inside Result —
+  there is no second shaft in Result to place them on.
+
+### Scope boundary
+
+- Home and Principle render no hint control of any kind — the entire hint
+  container lives inside Play's Predicting subtree, which does not exist on
+  either of those pages.
+- The formal-model disclosure (see "Audience and progressive disclosure")
+  and the hint path are independent: neither being open, closed, used, or
+  unused affects the other's availability.
+
+### Hint and Reveal tests (this slice)
+
+`[Approved design decision]` for every item below.
+
+1. `showConceptualHint`/`revealFastestValid` succeed only from their required
+   phase (`"hidden"`/`"conceptual"` respectively) and throw `Error` (never
+   `RangeError`) naming the rejected transition from every other phase,
+   including calling `revealFastestValid` directly from `"hidden"` (skipping
+   the conceptual step).
+2. `resetHint()` returns `initialHintState` unconditionally — called
+   independent of any prior state, since it takes none.
+3. `buildHintComparison` matches the differenceLabel rules above across a
+   representative sweep of `p` on both sides of `fastestValidP`, and exactly
+   at it; rejects invalid `p` (reusing the existing `assertValidPercentage`
+   table) and invalid `fastestValidP` (`<0`, `>100`, `NaN`, `±Infinity`) with
+   `RangeError`.
+4. The server-rendered `play.astro` contains exactly one `hint-button` and no
+   `hint-conceptual`/`reveal-button`/`hint-revealed`/`fastest-valid-marker`
+   element before any interaction.
+5. Clicking `hint-button` removes it, adds `hint-conceptual` and
+   `reveal-button`, and moves focus to `hint-conceptual`; `fastest-valid-marker`
+   still does not exist.
+6. Clicking `reveal-button` removes it, adds `hint-revealed` and
+   `fastest-valid-marker` (positioned per the shared projection function),
+   moves focus to `hint-revealed`, and leaves the visitor's own
+   `percentage-input` value and `braking-marker` position unchanged.
+7. Running Run without ever revealing (hint hidden, or conceptual-only)
+   yields a Result with no `[data-testid="hint-comparison"]` element.
+8. Revealing, then Running, yields a Result whose `hint-comparison` fields
+   match `buildHintComparison(p, BEGINNER_FASTEST_VALID_P)` exactly, for one
+   `p` below, one above, and `p=50` itself (the exact-match case).
+9. After Retry, the hint container is back to its single-`hint-button` initial
+   state (no conceptual/revealed/marker elements survive), across at least
+   two consecutive reveal → Run → Retry cycles, and focus after Retry is
+   still the range input, not the reset hint button.
+10. No element introduced by this slice contains forbidden vocabulary from
+    "Audience and progressive disclosure."
+11. Home and Principle render no element with `data-testid="hint"` (or any of
+    its descendants' testids) anywhere in their built pages.
+
 ## Acceptance criteria
 
 Each item is tagged `[Published spec]` (with the supporting quote),
