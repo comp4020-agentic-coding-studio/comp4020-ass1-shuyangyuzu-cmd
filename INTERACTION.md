@@ -1405,6 +1405,430 @@ no Astro Container, no controller state.
    (`t=0` → position `0`, velocity `0`; `t=t1(p)` → the switch state; `t=`
    total stop time → the final state) for the asymmetric case.
 
+## Advanced mode in Play (approved)
+
+`[Approved design decision]`. Extends "Advanced mode model and contract"
+above with the DOM, controller, and lifecycle contract that section deferred.
+Reuses the Beginner Play interface's own existing patterns — "First UI slice,"
+"Second UI slice," and "Third UI slice — Hint and Reveal" — rather than
+inventing new ones: same predict → run → result → retry loop, same retained-
+node lifecycle discipline, same Hint/Reveal shape, same rAF session-relative
+timestamp handling.
+
+### CHANGE THE RULES: gating and transition
+
+- The Beginner Result section gains a second button alongside the existing
+  Retry: `<button type="button" data-testid="change-rules-button">CHANGE THE
+  RULES</button>`, present in every Result render from the very first
+  completed Beginner attempt onward (Result never exists before the first
+  attempt, so "available only after the first completed attempt," the saved
+  plan's own phrase, is simply every Result this button's markup is built
+  alongside — there is no separate later unlock step to gate).
+- Clicking it: the Result section is removed exactly as Retry would remove
+  it, but the retained Beginner Predicting element is discarded outright
+  (never reattached) instead of being restored, `resetHint()`/the Beginner
+  hint DOM are irrelevant and simply discarded with it, and a freshly built
+  Advanced Predicting subtree (see below) is constructed and mounted into the
+  same `[data-testid="elevator-app"]` root.
+- This is a one-way, in-place mode switch for the remainder of the page's
+  lifetime — no control to switch back to Beginner exists in this slice,
+  matching the saved plan's own wording ("switches the same Play interface in
+  place to Advanced — no navigation, no new route"); a return path is out of
+  scope, not an oversight.
+- Focus moves to a new `<h2 data-testid="advanced-heading" tabindex="-1">` —
+  every transition in this interface has an explicit, tested focus
+  destination (Run → Result section, Retry → range input, and now CHANGE THE
+  RULES → the new mode's own heading, announcing the switch itself).
+- Advanced's Result section never renders a `change-rules-button` — there is
+  no further mode to switch to.
+
+### Why Advanced's Predicting subtree is JS-built, not server-rendered
+
+"DOM wiring and lifecycle" requires Beginner's Predicting subtree to be
+authored once in `play.astro` and only ever retained, never JS-built from
+nothing. Advanced cannot follow that rule the same way: it does not exist in
+the server-rendered page at all, and is only ever reachable after a visitor
+action. Its Predicting subtree is therefore built once via
+`document.createElement`/`textContent` (never `innerHTML`) at CHANGE THE
+RULES time, and from that point on is retained and detach/reattached across
+Run → Retry cycles exactly like Beginner's — the "retained node, never
+rebuilt" discipline still holds from the moment Advanced exists; only its
+very first construction differs, for the reason above.
+
+### Advanced controller (`src/scripts/elevator-advanced-controller.ts`, new)
+
+Mirrors `elevator-controller.ts` one-for-one, parameterised by
+`AdvancedModel` instead of the fixed `DEFAULT_MODEL`, with one addition
+(`setAdvancedModel`) Beginner has no equivalent of, since Beginner's `H`/`a`
+are fixed:
+
+```ts
+export type AdvancedPredictingState = {
+  readonly phase: "predicting"
+  readonly model: AdvancedModel
+  readonly p: number
+  readonly result: null
+}
+export type AdvancedRunningState = {
+  readonly phase: "running"
+  readonly model: AdvancedModel
+  readonly p: number
+  readonly result: AdvancedAttemptResult
+}
+export type AdvancedResultState = {
+  readonly phase: "result"
+  readonly model: AdvancedModel
+  readonly p: number
+  readonly result: AdvancedAttemptResult
+}
+export type AdvancedUIState = AdvancedPredictingState | AdvancedRunningState | AdvancedResultState
+
+export const initialAdvancedUIState: AdvancedPredictingState = {
+  phase: "predicting",
+  model: DEFAULT_ADVANCED_MODEL,
+  p: 35,
+  result: null,
+}
+
+export function setAdvancedPercentage(state: AdvancedUIState, p: number): AdvancedPredictingState
+export function setAdvancedModel(state: AdvancedUIState, model: AdvancedModel): AdvancedPredictingState
+export function runAdvanced(state: AdvancedUIState): AdvancedRunningState
+export function completeAdvancedRun(state: AdvancedUIState): AdvancedResultState
+export function retryAdvanced(state: AdvancedUIState): AdvancedPredictingState
+```
+
+- `setAdvancedPercentage` — valid only in `"predicting"`; validates `p` via
+  `assertValidAdvancedPercentage` (`RangeError` on an invalid value); returns
+  a `AdvancedPredictingState` with the same `model`, matching
+  `setPercentage`'s existing shape one-for-one. Called on `Running`/`Result`,
+  throws `Error` naming the rejected transition, never `RangeError`.
+- `setAdvancedModel` — valid only in `"predicting"`; validates `model` via
+  `assertValidAdvancedModel`; returns a `AdvancedPredictingState` with the new
+  `model` and the same `p` unchanged. `p` never needs re-validating on a
+  model change: it is always a percentage of `H` in `1..100`, valid for any
+  positive `H`/`a`/`b`. Called on `Running`/`Result`, throws `Error` naming
+  the rejected transition.
+- `runAdvanced` — valid only in `"predicting"`; snapshots `model` and `p`,
+  computes `buildAdvancedAttemptResult(model, p)` into the returned
+  `AdvancedRunningState.result` up front, matching Beginner's `run`. Called
+  on `Running`/`Result`, throws `Error` naming the rejected transition.
+- `completeAdvancedRun` — valid only in `"running"`; forwards the
+  already-computed `result`/`model`/`p` unchanged into an
+  `AdvancedResultState`. Called on `Predicting`/`Result`, throws `Error`
+  naming the rejected transition.
+- `retryAdvanced` — valid only in `"result"`; returns an
+  `AdvancedPredictingState` with both `model: state.model` and `p: state.p`
+  preserved exactly — not just `p` as Beginner does, since Advanced's model
+  is itself visitor-adjusted state that a fresh attempt should not silently
+  discard. Called on `Predicting`, throws `Error` naming the rejected
+  transition.
+- Every phase-transition error is `Error`, never `RangeError`, identifying
+  the rejected transition and phase — the same discipline as every other
+  controller in this document.
+
+### Hint/Reveal reuse and the two new pure helpers it needs
+
+Advanced reuses `HintState`/`showConceptualHint`/`revealFastestValid`/
+`resetHint` from `src/scripts/elevator-hint.ts` completely unchanged — that
+module already validates nothing model-specific, so it needs no Advanced
+variant. Two small additions are needed, both because Beginner's existing
+equivalents are hard-coded to Beginner's integer-only percentage contract or
+fixed copy:
+
+```ts
+// src/scripts/elevator-hint.ts
+export function buildAdvancedHintComparison(p: number, fastestValidP: number): HintComparison
+```
+
+- Identical to `buildHintComparison` in every respect (including the exact
+  `matches = p === fastestValidP` equality and the `differenceLabel` rules),
+  except it validates `p` via `assertValidAdvancedPercentage` (real-valued,
+  `1..100`) instead of `assertValidPercentage` (integer-only) — Advanced's
+  `p` is generally not an integer, so reusing `buildHintComparison` directly
+  would reject most valid Advanced attempts with a spurious `RangeError`.
+  `fastestValidP` validation is unchanged (`assertValidFastestValidP`,
+  already real-valued, needs no Advanced variant).
+- `matches` is exact-equality for the same reason already given in "Third UI
+  slice — Hint and Reveal": reachable in practice essentially only via the
+  MATCH action below, which sets `p` to a bit-identical copy of
+  `optimalSwitchPercentage(model)` — this is disclosed, not a defect.
+
+```ts
+// src/scripts/elevator-view.ts
+export function advancedConceptualHint(model: AdvancedModel): string
+```
+
+- Beginner's conceptual hint is fixed copy (`COPY.hintConceptual`) because
+  Beginner's `a`/`b` relationship never changes. Advanced's conceptual hint
+  keeps the same core reminder and appends one relationship-specific
+  sentence, satisfying the saved plan's "Advanced's conceptual hint responds
+  to the `a`/`b` relationship: weaker braking → brake earlier; stronger
+  braking → brake later; balanced limits → balanced/halfway guidance":
+  - `model.a === model.b` → `"${COPY.hintConceptual} Braking is exactly as
+    strong as accelerating here, so the switch should land exactly halfway."`
+  - `model.a > model.b` (braking weaker than accelerating) → `"${COPY.hintConceptual}
+    Braking is weaker than accelerating here, so the switch should happen
+    earlier than halfway."`
+  - `model.a < model.b` (braking stronger than accelerating) → `"${COPY.hintConceptual}
+    Braking is stronger than accelerating here, so the switch can happen
+    later than halfway."`
+  - None of "weaker"/"stronger"/"earlier"/"later"/"halfway"/"accelerating"/
+    "braking" is in the forbidden vocabulary list in "Audience and
+    progressive disclosure."
+  - This is a pure function of `model` alone, called fresh every time the
+    conceptual hint is shown — it is never stale, because it is never cached
+    across a parameter change; there is nothing to invalidate here (compare
+    to the revealed marker/value below, which is cached in the DOM and does
+    need explicit invalidation).
+
+### `resultViewAdvanced` and `runningReadoutAdvanced` (`elevator-view.ts`)
+
+Mirror `resultView`/`runningReadout` exactly, retyped against
+`AdvancedAttemptResult`/`AdvancedModel` and using `positionAtAdvanced`/
+`velocityAtAdvanced`/`switchTimeAdvanced` in place of their Beginner
+counterparts. The only substantive difference: Beginner's shared fields
+render `` `${result.p}%` `` directly because Beginner's `p` is always an
+integer; Advanced's shared fields render `` `${formatNumber(result.p)}%` ``,
+since Advanced's `p` is generally not. `HEADINGS`/`EXPLANATIONS` copy is
+reused unchanged — the classification and its plain-language explanation
+don't depend on which mode produced it.
+
+### Advanced Predicting markup (built once, at CHANGE THE RULES time)
+
+All new elements below use distinct, `advanced`-prefixed `data-testid`s —
+never reusing Beginner's own testids for a different element — because
+nothing about the mutual-exclusivity argument that lets Predicting/Running
+share testids with each other (they are never both live) applies to Beginner
+vs. Advanced: Beginner's subtree is discarded, not merely detached, so
+reusing its testids would just be confusing, not incorrect, but distinct
+names keep every test's intent unambiguous.
+
+- `<h2 data-testid="advanced-heading" tabindex="-1">` — heading copy (new
+  `COPY.advancedHeading`).
+- `<p data-testid="advanced-task">` — task copy (new `COPY.advancedTask`),
+  explaining that `H`, `a`, and `b` are now adjustable, in the same plain,
+  non-technical register as Beginner's task copy, and consistent with "Scope
+  exclusions": `a`/`b` are described as how fast the elevator can speed up
+  and slow down, never as force, motor power, or mass.
+- A shaft (`data-testid="advanced-shaft"`) with `advanced-target-marker`,
+  `advanced-braking-marker`, and `advanced-car` (at position `0`), projected
+  with `projectToShaftPercent`/`shaftDomain(model)` exactly like Beginner's,
+  recomputed whenever `model` changes (Beginner's shaft never needs this
+  because its `model` never changes).
+- Three labelled `type="number"` inputs — `advanced-h-input`
+  (`min=5 max=20 step=1`, initial `10`), `advanced-a-input`
+  (`min=0.5 max=3 step=0.1`, initial `1.5`), `advanced-b-input`
+  (`min=0.5 max=3 step=0.1`, initial `1.5`). These bounds/steps are a UI
+  affordance only, not a model constraint — `assertValidAdvancedModel`
+  itself accepts any finite positive value — chosen to keep the visible
+  range small enough to explore meaningfully in a slider-free numeric input.
+  No separate readout span is added for these three: unlike a range input, a
+  number input already visibly displays its own value.
+- The percentage control: `<input type="range" data-testid=
+  "advanced-percentage-input" min="1" max="100" step="0.1">` plus
+  `<span data-testid="advanced-percentage-value">`, mirroring Beginner's
+  input+span pair exactly, with the step widened to `0.1` per "Displayed
+  rounding and input step" above; the span's text is
+  `` `${formatNumber(p)}%` ``, not a raw template literal, since `p` may not
+  be an integer. A separate free-typing numeric input paired with this range
+  control (one of the two options the model-contract slice named) is not
+  added in this slice — the MATCH action below is this slice's chosen
+  reliable path to the exact optimum, per that section's own framing of it
+  as "the intended way most visitors will see `correct`."
+- `<button type="button" data-testid="advanced-run-button">Run</button>`
+  (reuses `COPY.runButton` text).
+- `<div data-testid="advanced-hint">` containing exactly
+  `<button type="button" data-testid="advanced-hint-button">STUCK? GET A
+  HINT.</button>` initially (reuses `COPY.hintButton` text) — same shape as
+  Beginner's `hint` container, distinct testids.
+
+### Advanced Hint/Reveal wiring
+
+- Clicking `advanced-hint-button` (`showConceptualHint`): removes itself,
+  appends `<p data-testid="advanced-hint-conceptual" tabindex="-1">` whose
+  text is `advancedConceptualHint(model)` computed from the **current**
+  model at click time, and
+  `<button type="button" data-testid="advanced-reveal-button">REVEAL THE
+  FASTEST VALID BRAKING POINT</button>` (reuses `COPY.revealButton` text).
+  Focus moves to `advanced-hint-conceptual`, exactly like Beginner.
+- Clicking `advanced-reveal-button` (`revealFastestValid`): removes itself;
+  appends `<p data-testid="advanced-hint-revealed" tabindex="-1">` reading
+  `` `The fastest valid braking point is ${formatNumber(optimalSwitchPercentage(model))}%
+  of the way to the target.` `` (computed from the current model, unlike
+  Beginner's fixed `50`), a
+  `<div data-testid="advanced-fastest-valid-marker" class="marker
+  marker-fastest-valid">` appended to `advanced-shaft` at
+  `projectToShaftPercent(optimalSwitchDistance(model), shaftDomain(model))`,
+  and a new
+  `<button type="button" data-testid="advanced-match-button">MATCH THE
+  FASTEST VALID BRAKE POINT</button>` — the action named and justified in
+  "Classification and the non-integer-optimum problem" above. Focus moves to
+  `advanced-hint-revealed`. The reveal never moves the visitor's own
+  percentage input/braking marker — only the new elements above are added,
+  matching Beginner's reveal exactly.
+- Clicking `advanced-match-button`: calls `setAdvancedPercentage(state,
+  optimalSwitchPercentage(model))` and re-renders the percentage input,
+  `advanced-percentage-value`, and `advanced-braking-marker` exactly as an
+  ordinary percentage change would — the same render path, just fed an
+  analytically-derived `p` instead of one read from the slider. Unlike
+  `advanced-hint-button`/`advanced-reveal-button`, `advanced-match-button` is
+  **not** removed on click and carries no explicit focus management: it is a
+  repeatable, idempotent action (clicking it again lands on the same `p*`
+  again, since `model` has not changed), not a one-shot reveal, so there is
+  no DOM node being removed out from under the browser's own default
+  post-click focus retention.
+- Because `optimalSwitchPercentage(model)` does not depend on `p`, changing
+  the percentage input alone never invalidates a revealed hint — the exact
+  same reasoning "Third UI slice — Hint and Reveal" already gives for
+  Beginner's fixed `fastestValidP`, just now justified by "the optimum is a
+  function of `model` only" rather than "the optimum is a fixed constant."
+  `advanced-match-button` changing `p` for the same reason does not reset
+  the hint either.
+- Changing `advanced-h-input`/`advanced-a-input`/`advanced-b-input` (`input`
+  event), after a first defensive check described below, calls
+  `setAdvancedModel` **and** resets the hint UI to its single-
+  `advanced-hint-button` initial state (removing `advanced-hint-conceptual`/
+  `advanced-reveal-button`/`advanced-hint-revealed`/`advanced-match-button`/
+  `advanced-fastest-valid-marker`, calling `resetHint()`) — this is the
+  concrete realisation of the saved plan's "parameter changes reset any
+  stale attempt result and revealed optimum safely": Predicting's own
+  `result` is always `null` already, so the only thing that can go stale on
+  a model change is a previously revealed `p*`/marker, computed for a model
+  that no longer exists.
+- Defensive input check (new to this slice; Beginner's range input can never
+  produce this class of problem because a browser range input's value is
+  always already clamped to a valid number): on `input` for the three
+  `type="number"` fields, the DOM layer only calls `setAdvancedModel` when
+  `Number.isFinite(value) && value > 0` for the changed field — an
+  in-progress edit (e.g. a field the visitor has temporarily cleared while
+  retyping it) leaves the last valid model in force rather than throwing a
+  `RangeError` out of an event handler. `assertValidAdvancedModel` remains
+  the authoritative guard against a directly-constructed invalid call —
+  this check exists only so a transient, incomplete keystroke never crashes
+  the page, the same "controller enforces it independently of whatever the
+  UI happens to render" principle already stated in the First UI slice
+  contract, applied to a new failure mode Beginner's UI could never hit.
+
+### Advanced Retry-reset policy
+
+Identical in shape to Beginner's: on Retry, the hint container resets to its
+single-`advanced-hint-button` state via the same reset routine as a model
+change above, the retained Advanced Predicting element's percentage input/
+span/braking-marker update to the preserved `p` (`renderPercentage`-
+equivalent), and — unlike a model change — `advanced-h-input`/
+`advanced-a-input`/`advanced-b-input` are **not** touched, because
+`retryAdvanced` preserves `model` unchanged; Retry is a fresh attempt at the
+same rules, not a rules reset. Focus moves to `advanced-percentage-input`,
+never to `advanced-h-input`/`advanced-a-input`/`advanced-b-input` or the
+reset hint button, mirroring Beginner's "focus moves to the range input"
+rule exactly.
+
+### Advanced Running and Result
+
+- Running reuses the exact rAF architecture in "Animation architecture"
+  above unchanged in every particular that matters for correctness,
+  including the per-session `sessionStartTimestamp` established from the
+  first callback's own timestamp argument (never the raw document-timeline
+  value) — substituting `stopTimeAdvanced(model, p)` for `stopTime`,
+  `positionAtAdvanced`/`velocityAtAdvanced` for `positionAt`/`velocityAt`,
+  and `runningReadoutAdvanced` for `runningReadout`. The reduced-motion check
+  (`matchMedia("(prefers-reduced-motion: reduce)")`, read once at Run time)
+  is the identical check, reused verbatim.
+- Running-phase testids: `advanced-running` (section), reusing
+  `advanced-shaft`/`advanced-target-marker`/`advanced-braking-marker`/
+  `advanced-car` (mutually exclusive with Predicting's use of the same
+  testids, exactly as Beginner's Running/Predicting shaft sharing already
+  works), `advanced-running-position`, `advanced-running-velocity`,
+  `advanced-running-cue`.
+- Result reuses `resultViewAdvanced`/`buildAdvancedHintComparison` the same
+  way Beginner's Result reuses `resultView`/`buildHintComparison`: a
+  `<section data-testid="advanced-result" tabindex="-1" aria-live="polite"
+  aria-atomic="true">` (no `role="status"`, matching "Result region
+  semantics" exactly), an `advanced-result-shaft` mirroring Beginner's
+  `result-shaft` (target/braking markers, car, `data-outcome`), the mapped
+  heading/explanation/fields (`data-field` values identical to Beginner's:
+  `percentage`, `finalPosition`, `finalVelocity`, `elapsedTime`, plus
+  `shortfall` or `velocityAtTarget` as appropriate — safe to reuse since
+  Beginner's own `result` container no longer exists anywhere in the
+  document by the time Advanced's exists), an `advanced-hint-comparison`
+  block (fields `yourBrake`/`fastestValid`/`hintDifference`, values formatted
+  with `formatNumber` since Advanced's numbers are generally non-integer,
+  unlike Beginner's raw-literal template) when the hint was `"revealed"` at
+  Run time, built from `buildAdvancedHintComparison(p,
+  optimalSwitchPercentage(model))`, and an `advanced-retry-button` (reusing
+  `COPY.retryButton` text) — **no** `change-rules-button`.
+- On `advanced-retry-button`: identical shape to Beginner's Retry handler —
+  remove the Result section, run the Advanced retry-reset policy above,
+  reattach the retained Advanced Predicting element, focus
+  `advanced-percentage-input`.
+
+### Advanced Hint/Reveal and Result tests (this slice)
+
+`[Approved design decision]` for every item below, extending "Hint and
+Reveal tests" and "Running-phase and animation tests" above to Advanced.
+
+1. `setAdvancedPercentage`/`setAdvancedModel`/`runAdvanced`/
+   `completeAdvancedRun`/`retryAdvanced` each succeed only from their
+   required phase and throw `Error` (never `RangeError`) naming the rejected
+   transition from every other phase; `setAdvancedModel` additionally throws
+   `RangeError` (via `assertValidAdvancedModel`) on an invalid model,
+   independent of phase-guard behaviour.
+2. `retryAdvanced` preserves both `model` and `p` unchanged from the
+   `AdvancedResultState` it is called on — not just `p`.
+3. `buildAdvancedHintComparison` accepts a representative non-integer `p`
+   (e.g. `57.142857142857146`) that `buildHintComparison` would reject, and
+   otherwise matches `buildHintComparison`'s `differenceLabel`/`matches`
+   rules exactly at equivalent inputs.
+4. `advancedConceptualHint` returns three distinguishable strings across
+   `a===b`, `a>b`, `a<b`, none containing forbidden vocabulary.
+5. The Beginner Result section renders both `retry-button` and
+   `change-rules-button` from the first completed attempt onward.
+6. Clicking `change-rules-button` leaves no Beginner-associated testid
+   (`predicting`, `result`, `hint`, or any of their descendants) anywhere in
+   `[data-testid="elevator-app"]`, mounts `advanced-predicting`'s full
+   initial markup (single `advanced-hint-button`, no
+   `advanced-fastest-valid-marker`), and moves focus to `advanced-heading`.
+7. Advanced's initial shaft/marker positions match
+   `projectToShaftPercent`/`shaftDomain(DEFAULT_ADVANCED_MODEL)`.
+8. Changing `advanced-a-input` (or `-b-input`/`-h-input`) after a reveal
+   removes `advanced-hint-conceptual`/`advanced-reveal-button`/
+   `advanced-hint-revealed`/`advanced-match-button`/
+   `advanced-fastest-valid-marker` and restores the single
+   `advanced-hint-button`; an in-progress empty edit of that same field does
+   not throw and leaves the prior valid model (and therefore the reveal, if
+   any) intact.
+9. Changing `advanced-percentage-input` alone after a reveal does **not**
+   reset the hint.
+10. After reveal, `advanced-hint-revealed`'s text and
+    `advanced-fastest-valid-marker`'s position match
+    `optimalSwitchPercentage`/`optimalSwitchDistance` for the current model
+    exactly (formatted via `formatNumber`).
+11. Clicking `advanced-match-button` sets `advanced-percentage-input`/
+    `advanced-percentage-value`/`advanced-braking-marker` to the current
+    `optimalSwitchPercentage(model)`, does not remove or alter
+    `advanced-hint-revealed`/`advanced-fastest-valid-marker`/itself, and is
+    idempotent across two consecutive clicks.
+12. With reduced motion stubbed `true`, running Advanced to completion for
+    one `short` `p`, one `overshoot` `p`, and one `correct` `p` (reached via
+    `advanced-match-button` before Run) each yield an `advanced-result`
+    matching `resultViewAdvanced(buildAdvancedAttemptResult(model, p))`;
+    the `correct` case is verified independent of any fixed-timestep/render-
+    timing assumption, consistent with this repo's rule against classifying
+    boundary events from animation frames.
+13. Running to completion after a reveal yields an `advanced-hint-comparison`
+    matching `buildAdvancedHintComparison(p, optimalSwitchPercentage(model))`
+    exactly; running without ever revealing yields no
+    `advanced-hint-comparison` element.
+14. Across at least two consecutive Run → Retry cycles in Advanced: `model`
+    (visible via the three number inputs' preserved values) survives
+    unchanged, `p` is preserved (not reset to `35`), the hint container
+    resets each time, and focus after Retry is `advanced-percentage-input`.
+15. No element introduced by this slice contains forbidden vocabulary from
+    "Audience and progressive disclosure."
+16. Home and Principle still render no element with any `advanced`-prefixed
+    `data-testid` anywhere in their built pages (regression check — this
+    slice adds many such testids for the first time).
+
 ## Acceptance criteria
 
 Each item is tagged `[Published spec]` (with the supporting quote),
