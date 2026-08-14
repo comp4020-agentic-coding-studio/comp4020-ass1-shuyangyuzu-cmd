@@ -264,13 +264,23 @@ export type AttemptResult =
 
 ## Scope exclusions
 
-Point mass only. No modeling of mass, motor torque-speed curve, gravity,
-cable dynamics, jerk/comfort limits, asymmetric drive/brake authority,
-actuator lag, or sensor noise. The symmetric acceleration bound is a design
-choice for this explainer, not a claim about how a real passenger elevator
-is controlled. `H` and `a` are fixed for the whole experience — not
-visitor-adjustable. No live/reflex braking — the visitor always predicts
-before the run, never reacts during it.
+Point mass only, for both Beginner and Advanced. No modeling of mass, motor
+torque-speed curve, gravity, cable dynamics, jerk/comfort limits, actuator
+lag, or sensor noise, in either mode. No live/reflex braking in either mode —
+the visitor always predicts before the run, never reacts during it.
+
+For Beginner specifically: the symmetric acceleration bound is a design
+choice for this explainer, not a claim about how a real passenger elevator is
+controlled, and `H` and `a` are fixed for the whole Beginner experience — not
+visitor-adjustable there.
+
+Advanced mode (see "Advanced mode model and contract" below) is the one
+deliberate exception to Beginner's fixed, symmetric parameters: it exposes
+`H`, the acceleration limit `a`, and a separate braking-magnitude limit `b`
+as visitor-adjustable, asymmetric parameters. This is the only place
+asymmetric drive/brake authority is modeled anywhere in this prototype, and
+it remains an idealised point-mass abstraction — none of the other
+exclusions above are lifted for Advanced.
 
 ## State machine and visible outcomes
 
@@ -1190,6 +1200,207 @@ Real sticky/stacked rendering at both marking viewports is a manual/browser
 check (see "Browser-level and manual checks"), not asserted by any test above
 — JSDOM has no layout engine and cannot verify `position: sticky` or actual
 column placement.
+
+## Advanced mode model and contract (approved)
+
+`[Approved design decision]`. This section is model-only: it defines the pure
+functions and types Advanced mode needs. No DOM, controller wiring, or
+"CHANGE THE RULES" control exists yet — that is the next slice. Reusing this
+document's own carve-out in "Scope exclusions" above, Advanced is the sole
+place `H`, `a`, and a separate braking magnitude `b` become visitor-adjustable
+and asymmetric; everything else excluded there (no mass/motor/jerk/lag/noise
+modeling) still holds.
+
+### Parameters and validation
+
+- `H`: shaft height (m), same role as Beginner's `H`.
+- `a`: acceleration limit (m/s²) — the maximum rate the elevator can speed up
+  at, same role as Beginner's `a`.
+- `b`: braking magnitude (m/s²) — the maximum rate the elevator can slow down
+  at. Independent of `a`; Beginner is the special case `b = a`.
+- All three: finite and `> 0`, validated by a new `assertValidAdvancedModel`
+  in `src/model/elevator.ts`, mirroring `assertValidModel`'s existing
+  discipline exactly (throws `RangeError` on the first invalid field, no
+  clamping).
+- `p`: the visitor's chosen switch point, expressed the same way as
+  Beginner's — percent of `H` at which the switch from accelerating to
+  braking happens (`s(p) = (p/100)·H`, identical formula to Beginner). Unlike
+  Beginner, `p` is **not** integer-constrained: `assertValidAdvancedPercentage`
+  requires only finite and `1 ≤ p ≤ 100`, real-valued. This is necessary
+  because Advanced's optimal switch point is generally irrational (see
+  below) and an integer grid could never reach it.
+- `DEFAULT_ADVANCED_MODEL = { H: 10, a: 1.5, b: 1.5 }` — identical numbers to
+  Beginner's `DEFAULT_MODEL`, so Advanced starts exactly where Beginner left
+  off before the visitor changes anything.
+
+### Verified asymmetric formulas
+
+Derived from the same two-phase kinematics as Beginner's model, generalised
+so the braking phase uses `b` instead of `a`, and independently cross-checked
+by confirming each reduces to Beginner's exact formula when `b = a`:
+
+```
+s(p) = (p/100)·H                     switch distance (unchanged from Beginner)
+t1(p) = √(2s/a)                      switch time (accel phase depends on a only)
+v1(p) = √(2a·s) = a·t1(p)            speed at the switch
+
+x_stop(p) = s + a·s/b = s·(1 + a/b)  final stop position (reduces to 2s when b=a)
+t2(p) = v1(p)/b                      braking-phase duration
+T(p)  = t1(p) + t2(p)                total physical stopping time
+```
+
+`x_stop(p)` generalises Beginner's `stopPosition(p) = 2s(p)`: braking at rate
+`b` instead of `a` covers a different distance (`a·s/b`, from `v1² = 2a·s` and
+`distance = v1²/(2b)`) to shed the same speed `v1`, so the two phases are no
+longer symmetric around `s`.
+
+The optimal switch point solves `x_stop(p) = H` exactly:
+
+```
+p* = 100·b/(a+b)          optimal switch percentage
+s* = H·b/(a+b)             optimal switch distance
+v* = √(2abH/(a+b))         optimal switch speed
+T* = √(2H(a+b)/(ab))       minimum valid time
+```
+
+Each reduces to Beginner's verified value at `b = a`: `p* = 50`, `s* = H/2`,
+`v* = √(aH)`, `T* = 2√(H/a)` — checked as an explicit test case, not assumed.
+
+H-crossing (only possible when `x_stop(p) > H`, i.e. overshoot), braking at
+rate `b` instead of `a`:
+
+```
+v(H,p)      = √(2a·s − 2b·(H−s))         real-valued only for x_stop(p) ≥ H
+t_Hcross(p) = t1(p) + (v1(p) − v(H,p))/b  defined only for x_stop(p) > H
+```
+
+Both reduce to Beginner's `v(H,p) = √(2a(2s−H))` and
+`t_Hcross(p) = t1(p) + (v1(p)−v(H,p))/a` at `b = a`.
+
+### Classification and the non-integer-optimum problem
+
+Beginner's classification needs no tolerance because `p=50` is exactly
+representable and `stopPosition(model,50)` is bit-exact in IEEE-754 for this
+model's numbers (see "Verified model and formulas" above). Advanced cannot
+inherit that for free: `p*` is generally irrational, so even a value set
+*exactly* to `p*` will not always round-trip through
+`s(p) → x_stop(p)` back to a bit-exact `H` — floating-point arithmetic
+accumulates rounding error across the division and two multiplications, even
+though the algebra is exact.
+
+Resolution (an explicit, tested policy — not a hidden epsilon):
+
+- `classifyAdvanced(model, p)` compares `x_stop(p)` to `H` with a fixed
+  tolerance of `1e-9` metres: `short` if `x_stop(p) < H − 1e-9`, `correct` if
+  `|x_stop(p) − H| ≤ 1e-9`, `overshoot` if `x_stop(p) > H + 1e-9`.
+- `1e-9` m is chosen because it sits comfortably between two bounds: it is
+  many orders of magnitude larger than the floating-point rounding error this
+  model's arithmetic actually produces (empirically ~1e-14–1e-13 m at
+  `H` around 10 m), so it never misclassifies a genuinely short or
+  overshooting attempt as correct; and it is many orders of magnitude
+  smaller than the displayed precision (two decimal places, i.e. ≥0.01 m), so
+  it is visually indistinguishable from exact on screen.
+- This tolerance exists solely to make the snap-triggered exact case
+  classify as `correct` reliably; `short` and `overshoot` remain ordinary
+  `<`/`>` comparisons around it, unchanged in spirit from Beginner.
+- Reaching `correct` through ordinary slider/keyboard/numeric input alone is
+  expected to be rare to the point of practical impossibility for a generic
+  irrational `p*` — that is disclosed, not hidden. The intended way most
+  visitors will see `correct` in Advanced is a `[Slice 5]` "MATCH THE FASTEST
+  VALID BRAKE POINT" action, offered only after Reveal, that sets the
+  visitor's control to the analytic `p*` in one non-silent step, without
+  moving it at any other time. This mirrors how Beginner's `p=50` is
+  trivially reachable by design; Advanced makes the equivalent reachable by
+  an explicit action rather than by chance.
+- Because these are pure, stateless functions, there is nothing to
+  "invalidate" at this layer — every call recomputes from the current `H`,
+  `a`, `b`. Discarding a *previously displayed* hint value or marker when the
+  visitor changes a parameter is a Slice 5 controller/DOM concern, out of
+  scope for this model-only slice.
+
+### Displayed rounding and input step (forward contract for Slice 5)
+
+- Displayed numbers (`p`, `s`, `v`, `T`, `H`, `a`, `b`) reuse the existing
+  `formatNumber` two-decimal trim convention from `src/scripts/elevator-view.ts`
+  — no new formatting function.
+- Slice 5's `p` control (range input, numeric input, and keyboard step) uses
+  a step of `0.1` percentage points — finer than Beginner's integer step,
+  because Advanced's optimum is generally non-integer, but still a tidy,
+  displayable grid for manual exploration. Reaching the exact optimum by
+  manual stepping is not expected or required; see "MATCH THE FASTEST VALID
+  BRAKE POINT" above for the reliable path to `correct`.
+
+### API surface (`src/model/elevator.ts`, extended)
+
+New exports, matching Beginner's existing naming and validation pattern
+one-for-one (each validates via `assertValidAdvancedModel` /
+`assertValidAdvancedPercentage` first, throwing `RangeError`, no clamping):
+
+```
+AdvancedModel, DEFAULT_ADVANCED_MODEL, AdvancedClassification,
+AdvancedAttemptResult
+assertValidAdvancedModel(model)
+assertValidAdvancedPercentage(p)
+optimalSwitchPercentage(model)      → p*
+optimalSwitchDistance(model)        → s*
+optimalSwitchSpeed(model)           → v*
+optimalTime(model)                  → T*
+switchDistanceAdvanced(model, p)    → s(p)
+stopPositionAdvanced(model, p)      → x_stop(p)
+switchTimeAdvanced(model, p)        → t1(p)
+switchSpeedAdvanced(model, p)       → v1(p)
+stopTimeAdvanced(model, p)          → T(p)
+classifyAdvanced(model, p)          → "short" | "correct" | "overshoot"
+speedAtTargetAdvanced(model, p)     → v(H,p), only for overshoot, else undefined
+crossingTimeAdvanced(model, p)      → t_Hcross(p), only for overshoot, else undefined
+positionAtAdvanced(model, p, t)     → position at physical time t (accel/brake phases)
+velocityAtAdvanced(model, p, t)     → velocity at physical time t
+buildAdvancedAttemptResult(model, p) → AdvancedAttemptResult
+```
+
+`AdvancedAttemptResult` mirrors Beginner's `AttemptResult` union shape
+exactly, except every branch's `p` is `number` (not a literal `50` on the
+`correct` branch) — Advanced's optimum is not a fixed constant.
+
+### Advanced model tests (this slice)
+
+`[Approved design decision]` for every item below. All are pure-function
+tests in `src/model/elevator.test.ts` (or a co-located extension) — no DOM,
+no Astro Container, no controller state.
+
+1. `assertValidAdvancedModel` and `assertValidAdvancedPercentage` throw
+   `RangeError` on non-finite, non-positive (for `H`/`a`/`b`), or
+   out-of-`[1,100]` (for `p`) inputs, and accept non-integer `p` (unlike
+   Beginner's `assertValidPercentage`).
+2. At `b = a` (any positive value, not just the default), every new formula
+   equals its Beginner counterpart exactly: `optimalSwitchPercentage` = `50`,
+   `optimalSwitchDistance` = `H/2`, `optimalSwitchSpeed` =
+   `switchSpeed(model, 50)`, `optimalTime` = `stopTime(model, 50)`, and
+   `classifyAdvanced(model, p)` agrees with `classify(p)` for representative
+   short/correct/overshoot `p` values.
+3. For an explicitly asymmetric case (`H=10, a=1.5, b=2`, cross-checked by
+   hand against the closed forms above before being written into the test):
+   `optimalSwitchPercentage ≈ 57.142857`, `optimalSwitchDistance ≈ 5.714286`,
+   `optimalSwitchSpeed ≈ 4.629100`, `optimalTime ≈ 4.938648` (standard
+   floating-point closeness for these irrational values, per "Verified model
+   and formulas" above — test precision, not a visitor-facing tolerance).
+4. `classifyAdvanced` returns `short` for `p` strictly below `p*` by more
+   than the `1e-9` m tolerance in stopping position, `overshoot` strictly
+   above it, and `correct` at `p = optimalSwitchPercentage(model)` itself —
+   for the same asymmetric case, proving the tolerance does its one job
+   without a wider test (e.g. `p* + 5` percentage points away) also
+   registering as `correct`.
+5. `speedAtTargetAdvanced` and `crossingTimeAdvanced` are `undefined` for
+   `short` and `correct` classifications and return a positive, finite value
+   for `overshoot`, matching Beginner's existing `undefined`-shape contract.
+6. `buildAdvancedAttemptResult` returns the correctly shaped branch (by
+   `classification`) with all Beginner-equivalent fields present, for one
+   `short`, one `correct` (via the snap-equivalent exact `p*`), and one
+   `overshoot` case.
+7. `positionAtAdvanced`/`velocityAtAdvanced` match `positionAt`/`velocityAt`
+   exactly at `b = a`, and satisfy the same boundary identities as Beginner's
+   (`t=0` → position `0`, velocity `0`; `t=t1(p)` → the switch state; `t=`
+   total stop time → the final state) for the asymmetric case.
 
 ## Acceptance criteria
 
