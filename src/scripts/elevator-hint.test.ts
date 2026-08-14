@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatNumber } from "./elevator-view";
 import {
   BEGINNER_FASTEST_VALID_P,
+  buildAdvancedHintComparison,
   buildHintComparison,
   initialHintState,
   resetHint,
@@ -19,6 +20,9 @@ import {
 
 const INVALID_PERCENTAGES = [0, 101, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
 const INVALID_FASTEST_VALID = [-1, 101, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+// 1.5 is a valid Advanced percentage (real-valued, 1..100) — unlike
+// INVALID_PERCENTAGES above, which is Beginner's integer-only contract.
+const ADVANCED_INVALID_PERCENTAGES = [0, 0.5, 101, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
 
 describe("initialHintState", () => {
   it("starts hidden", () => {
@@ -131,5 +135,45 @@ describe("buildHintComparison", () => {
 
   it.each(INVALID_FASTEST_VALID)("rejects invalid fastestValidP=%s with RangeError", (fastestValidP) => {
     expect(() => buildHintComparison(50, fastestValidP)).toThrow(RangeError);
+  });
+});
+
+describe("buildAdvancedHintComparison", () => {
+  it("accepts a representative non-integer p that buildHintComparison would reject", () => {
+    expect(() => buildHintComparison(57.142857142857146, 57.142857142857146)).toThrow(RangeError);
+    expect(() => buildAdvancedHintComparison(57.142857142857146, 57.142857142857146)).not.toThrow();
+  });
+
+  it("reports an exact match with no difference language when p equals fastestValidP", () => {
+    const comparison: HintComparison = buildAdvancedHintComparison(57.142857142857146, 57.142857142857146);
+
+    expect(comparison).toEqual({
+      yourBrake: 57.142857142857146,
+      fastestValid: 57.142857142857146,
+      differenceLabel: "Matches exactly",
+      matches: true,
+    });
+  });
+
+  it("reports 'too early' with the correct percentage-point gap when p is below fastestValidP", () => {
+    const comparison = buildAdvancedHintComparison(40, 60);
+
+    expect(comparison.matches).toBe(false);
+    expect(comparison.differenceLabel).toBe(`${formatNumber(20)} percentage points too early`);
+  });
+
+  it("reports 'too late' with the correct percentage-point gap when p is above fastestValidP", () => {
+    const comparison = buildAdvancedHintComparison(60, 40);
+
+    expect(comparison.matches).toBe(false);
+    expect(comparison.differenceLabel).toBe(`${formatNumber(20)} percentage points too late`);
+  });
+
+  it.each(ADVANCED_INVALID_PERCENTAGES)("rejects invalid p=%s with RangeError", (p) => {
+    expect(() => buildAdvancedHintComparison(p, BEGINNER_FASTEST_VALID_P)).toThrow(RangeError);
+  });
+
+  it.each(INVALID_FASTEST_VALID)("rejects invalid fastestValidP=%s with RangeError", (fastestValidP) => {
+    expect(() => buildAdvancedHintComparison(50, fastestValidP)).toThrow(RangeError);
   });
 });

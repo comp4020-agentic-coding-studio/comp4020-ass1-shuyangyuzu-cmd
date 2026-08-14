@@ -1,4 +1,15 @@
-import { positionAt, switchTime, velocityAt, type AttemptResult, type Model } from "../model/elevator";
+import {
+  positionAt,
+  positionAtAdvanced,
+  switchTime,
+  switchTimeAdvanced,
+  velocityAt,
+  velocityAtAdvanced,
+  type AdvancedAttemptResult,
+  type AdvancedModel,
+  type AttemptResult,
+  type Model,
+} from "../model/elevator";
 
 export type DisplayField = {
   readonly key: string;
@@ -26,6 +37,11 @@ export const COPY = {
   hintButton: "STUCK? GET A HINT.",
   hintConceptual: "Reaching the target is only half the job. What should the elevator's velocity be when it gets there?",
   revealButton: "REVEAL THE FASTEST VALID BRAKING POINT",
+  changeRulesButton: "CHANGE THE RULES",
+  matchButton: "MATCH THE FASTEST VALID BRAKE POINT",
+  advancedHeading: "Now with rules of your own",
+  advancedTask:
+    "Set how fast the elevator can speed up and how fast it can slow down, then choose where to start braking. It still has to be completely stopped exactly at the target.",
 } as const;
 
 export function formatNumber(value: number): string {
@@ -108,5 +124,74 @@ export function runningReadout(model: Model, p: number, t: number): RunningReado
     position: `${formatNumber(position)} m`,
     velocity: `${formatNumber(velocity)} m/s`,
     cue,
+  };
+}
+
+export function runningReadoutAdvanced(model: AdvancedModel, p: number, t: number): RunningReadout {
+  const position = positionAtAdvanced(model, p, t);
+  const velocity = velocityAtAdvanced(model, p, t);
+  const cue = t < switchTimeAdvanced(model, p) ? "accelerating" : "braking";
+  return {
+    position: `${formatNumber(position)} m`,
+    velocity: `${formatNumber(velocity)} m/s`,
+    cue,
+  };
+}
+
+export function advancedConceptualHint(model: AdvancedModel): string {
+  if (model.a === model.b) {
+    return `${COPY.hintConceptual} Braking is exactly as strong as accelerating here, so the switch should land exactly halfway.`;
+  }
+  if (model.a > model.b) {
+    return `${COPY.hintConceptual} Braking is weaker than accelerating here, so the switch should happen earlier than halfway.`;
+  }
+  return `${COPY.hintConceptual} Braking is stronger than accelerating here, so the switch can happen later than halfway.`;
+}
+
+function sharedFieldsAdvanced(result: AdvancedAttemptResult): DisplayField[] {
+  return [
+    { key: "percentage", label: "Braking started at", value: `${formatNumber(result.p)}%` },
+    { key: "finalPosition", label: "Final position", value: `${formatNumber(result.finalState.position)} m` },
+    { key: "finalVelocity", label: "Final velocity", value: `${formatNumber(result.finalState.velocity)} m/s` },
+    { key: "elapsedTime", label: "Time taken", value: `${formatNumber(result.finalState.time)} s` },
+  ];
+}
+
+export function resultViewAdvanced(result: AdvancedAttemptResult): ResultView {
+  const heading = HEADINGS[result.classification];
+  const explanation = EXPLANATIONS[result.classification];
+  const fields = sharedFieldsAdvanced(result);
+
+  if (result.classification === "short") {
+    return {
+      heading,
+      explanation,
+      fields: [
+        ...fields,
+        { key: "shortfall", label: "Distance short of the target", value: `${formatNumber(result.shortfall)} m` },
+      ],
+    };
+  }
+
+  if (result.classification === "correct") {
+    return {
+      heading,
+      explanation,
+      fields,
+      minimumMessage: "This is the fastest possible time to stop exactly at the target.",
+    };
+  }
+
+  return {
+    heading,
+    explanation,
+    fields: [
+      ...fields,
+      {
+        key: "velocityAtTarget",
+        label: "Velocity at the target",
+        value: `${formatNumber(result.velocityAtTarget)} m/s`,
+      },
+    ],
   };
 }

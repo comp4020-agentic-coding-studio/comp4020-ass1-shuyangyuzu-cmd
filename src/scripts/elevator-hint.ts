@@ -1,4 +1,4 @@
-import { assertValidPercentage } from "../model/elevator";
+import { assertValidAdvancedPercentage, assertValidPercentage } from "../model/elevator";
 import { formatNumber } from "./elevator-view";
 
 export type HintPhase = "hidden" | "conceptual" | "revealed";
@@ -44,6 +44,20 @@ function assertValidFastestValidP(fastestValidP: number): void {
 
 export function buildHintComparison(p: number, fastestValidP: number): HintComparison {
   assertValidPercentage(p);
+  assertValidFastestValidP(fastestValidP);
+
+  const matches = p === fastestValidP;
+  const differenceLabel = matches
+    ? "Matches exactly"
+    : p < fastestValidP
+      ? `${formatNumber(fastestValidP - p)} percentage points too early`
+      : `${formatNumber(p - fastestValidP)} percentage points too late`;
+
+  return { yourBrake: p, fastestValid: fastestValidP, differenceLabel, matches };
+}
+
+export function buildAdvancedHintComparison(p: number, fastestValidP: number): HintComparison {
+  assertValidAdvancedPercentage(p);
   assertValidFastestValidP(fastestValidP);
 
   const matches = p === fastestValidP;

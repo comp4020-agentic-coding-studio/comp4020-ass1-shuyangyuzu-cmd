@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { buildAttemptResult, DEFAULT_MODEL, positionAt, switchTime, velocityAt, type AttemptResult } from "../model/elevator";
 import {
+  buildAdvancedAttemptResult,
+  buildAttemptResult,
+  DEFAULT_ADVANCED_MODEL,
+  DEFAULT_MODEL,
+  positionAt,
+  positionAtAdvanced,
+  switchTime,
+  switchTimeAdvanced,
+  velocityAt,
+  velocityAtAdvanced,
+  type AdvancedAttemptResult,
+  type AdvancedModel,
+  type AttemptResult,
+} from "../model/elevator";
+import {
+  advancedConceptualHint,
+  COPY,
   DISCLAIMER,
   formatNumber,
   resultView,
+  resultViewAdvanced,
   runningReadout,
+  runningReadoutAdvanced,
   type DisplayField,
   type ResultView,
   type RunningReadout,
@@ -205,5 +223,159 @@ describe("runningReadout — accelerating/braking cue", () => {
 
     expect(runningReadout(model, p, tSwitch * 0.5).cue).toBe("accelerating");
     expect(runningReadout(model, p, tSwitch).cue).toBe("braking");
+  });
+});
+
+// Advanced mode reuses Beginner's exact display conventions (see
+// INTERACTION.md "Advanced mode in Play (approved)" >
+// "resultViewAdvanced and runningReadoutAdvanced"). DEFAULT_ADVANCED_MODEL
+// has a===b===1.5, so it is numerically identical to DEFAULT_MODEL and the
+// same p=35/50/65 attempts classify as short/correct/overshoot exactly as
+// Beginner's do — that equivalence is exploited below to reuse Beginner's
+// known-good expected figures, while a separate asymmetric model and a
+// non-integer p exercise what is actually new in the Advanced path.
+
+const SHORT_ADV: AdvancedAttemptResult = buildAdvancedAttemptResult(DEFAULT_ADVANCED_MODEL, 35);
+const CORRECT_ADV: AdvancedAttemptResult = buildAdvancedAttemptResult(DEFAULT_ADVANCED_MODEL, 50);
+const OVERSHOOT_ADV: AdvancedAttemptResult = buildAdvancedAttemptResult(DEFAULT_ADVANCED_MODEL, 65);
+
+describe("resultViewAdvanced — short (p=35)", () => {
+  const view: ResultView = resultViewAdvanced(SHORT_ADV);
+
+  it("matches Beginner's heading/explanation/fields for the numerically equivalent model", () => {
+    expect(view.heading).toBe("Too early");
+    expect(view.fields).toEqual([
+      { key: "percentage", label: "Braking started at", value: "35%" },
+      { key: "finalPosition", label: "Final position", value: "7 m" },
+      { key: "finalVelocity", label: "Final velocity", value: "0 m/s" },
+      { key: "elapsedTime", label: "Time taken", value: "4.32 s" },
+      { key: "shortfall", label: "Distance short of the target", value: "3 m" },
+    ]);
+  });
+});
+
+describe("resultViewAdvanced — correct (p=50)", () => {
+  const view: ResultView = resultViewAdvanced(CORRECT_ADV);
+
+  it("carries the same minimumMessage as Beginner", () => {
+    expect(view.heading).toBe("Exactly right");
+    expect(view.minimumMessage).toBe("This is the fastest possible time to stop exactly at the target.");
+  });
+});
+
+describe("resultViewAdvanced — overshoot (p=65)", () => {
+  const view: ResultView = resultViewAdvanced(OVERSHOOT_ADV);
+
+  it("includes velocityAtTarget like Beginner's overshoot view", () => {
+    expect(view.heading).toBe("Too late");
+    expect(view.fields).toEqual([
+      { key: "percentage", label: "Braking started at", value: "65%" },
+      { key: "finalPosition", label: "Final position", value: "13 m" },
+      { key: "finalVelocity", label: "Final velocity", value: "0 m/s" },
+      { key: "elapsedTime", label: "Time taken", value: "5.89 s" },
+      { key: "velocityAtTarget", label: "Velocity at the target", value: "3 m/s" },
+    ]);
+  });
+});
+
+describe("resultViewAdvanced — non-integer p", () => {
+  it("formats the percentage field via formatNumber instead of a raw template", () => {
+    const asymmetric: AdvancedModel = { H: 10, a: 1, b: 2 };
+    const result = buildAdvancedAttemptResult(asymmetric, 57.142857142857146);
+    const view = resultViewAdvanced(result);
+
+    const percentageField = view.fields.find((f) => f.key === "percentage");
+    expect(percentageField).toEqual({
+      key: "percentage",
+      label: "Braking started at",
+      value: `${formatNumber(57.142857142857146)}%`,
+    });
+    expect(percentageField?.value).toBe("57.14%");
+  });
+});
+
+describe("resultViewAdvanced — forbidden vocabulary", () => {
+  it.each([
+    ["short", SHORT_ADV],
+    ["correct", CORRECT_ADV],
+    ["overshoot", OVERSHOOT_ADV],
+  ] as const)("keeps every %s view string free of forbidden terms", (_label, result) => {
+    const view = resultViewAdvanced(result);
+    assertNoForbiddenVocabulary(view.heading);
+    assertNoForbiddenVocabulary(view.explanation);
+    if (view.minimumMessage) assertNoForbiddenVocabulary(view.minimumMessage);
+    for (const field of view.fields) {
+      assertNoForbiddenVocabulary(field.label);
+      assertNoForbiddenVocabulary(field.value);
+    }
+  });
+});
+
+describe("runningReadoutAdvanced", () => {
+  it("matches Beginner's readout for the numerically equivalent model", () => {
+    const model = DEFAULT_ADVANCED_MODEL;
+    const p = 65;
+    const t = switchTimeAdvanced(model, p) * 0.5;
+
+    const readout = runningReadoutAdvanced(model, p, t);
+    expect(readout.position).toBe(`${formatNumber(positionAtAdvanced(model, p, t))} m`);
+    expect(readout.velocity).toBe(`${formatNumber(velocityAtAdvanced(model, p, t))} m/s`);
+  });
+
+  it("uses model.b, not model.a, to determine the braking-phase readout for an asymmetric model", () => {
+    const asymmetric: AdvancedModel = { H: 10, a: 1, b: 3 };
+    const p = 65;
+    const tSwitch = switchTimeAdvanced(asymmetric, p);
+    const tAfter = tSwitch + 0.1;
+
+    const readout = runningReadoutAdvanced(asymmetric, p, tAfter);
+    expect(readout.velocity).toBe(`${formatNumber(velocityAtAdvanced(asymmetric, p, tAfter))} m/s`);
+    expect(readout.cue).toBe("braking");
+  });
+
+  it("is 'accelerating' before switchTimeAdvanced and 'braking' from switchTimeAdvanced onward", () => {
+    const model: AdvancedModel = { H: 10, a: 1, b: 2 };
+    const p = 50;
+    const tSwitch = switchTimeAdvanced(model, p);
+
+    expect(runningReadoutAdvanced(model, p, tSwitch * 0.5).cue).toBe("accelerating");
+    expect(runningReadoutAdvanced(model, p, tSwitch).cue).toBe("braking");
+  });
+
+  it("propagates RangeError for an out-of-domain t", () => {
+    expect(() => runningReadoutAdvanced(DEFAULT_ADVANCED_MODEL, 65, -1)).toThrow(RangeError);
+  });
+});
+
+describe("advancedConceptualHint", () => {
+  it("starts with the shared conceptual hint text", () => {
+    expect(advancedConceptualHint(DEFAULT_ADVANCED_MODEL).startsWith(COPY.hintConceptual)).toBe(true);
+  });
+
+  it("says the switch lands exactly halfway when a === b", () => {
+    const hint = advancedConceptualHint({ H: 10, a: 1.5, b: 1.5 });
+    expect(hint).toBe(
+      `${COPY.hintConceptual} Braking is exactly as strong as accelerating here, so the switch should land exactly halfway.`,
+    );
+  });
+
+  it("says to brake earlier than halfway when a > b (braking is weaker)", () => {
+    const hint = advancedConceptualHint({ H: 10, a: 2, b: 1 });
+    expect(hint).toBe(
+      `${COPY.hintConceptual} Braking is weaker than accelerating here, so the switch should happen earlier than halfway.`,
+    );
+  });
+
+  it("says braking can happen later than halfway when a < b (braking is stronger)", () => {
+    const hint = advancedConceptualHint({ H: 10, a: 1, b: 2 });
+    expect(hint).toBe(
+      `${COPY.hintConceptual} Braking is stronger than accelerating here, so the switch can happen later than halfway.`,
+    );
+  });
+
+  it("keeps the hint free of forbidden vocabulary in all three branches", () => {
+    assertNoForbiddenVocabulary(advancedConceptualHint({ H: 10, a: 1.5, b: 1.5 }));
+    assertNoForbiddenVocabulary(advancedConceptualHint({ H: 10, a: 2, b: 1 }));
+    assertNoForbiddenVocabulary(advancedConceptualHint({ H: 10, a: 1, b: 2 }));
   });
 });
