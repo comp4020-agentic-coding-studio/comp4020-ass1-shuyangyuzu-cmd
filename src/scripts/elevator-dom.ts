@@ -1,9 +1,20 @@
 import { DEFAULT_MODEL, positionAt, stopTime, switchDistance, type AttemptResult } from "../model/elevator";
 import { physicalTimeAt, projectToShaftPercent, shaftDomain, visualDuration } from "./elevator-animation";
 import { completeRun, initialUIState, retry, run, setPercentage, type RunningState, type UIState } from "./elevator-controller";
+import {
+  BEGINNER_FASTEST_VALID_P,
+  buildHintComparison,
+  initialHintState,
+  resetHint,
+  revealFastestValid,
+  showConceptualHint,
+  type HintComparison,
+  type HintState,
+} from "./elevator-hint";
 import { COPY, resultView, runningReadout } from "./elevator-view";
 
 const SHAFT_EXTENT = shaftDomain(DEFAULT_MODEL);
+const FASTEST_VALID_PERCENT = projectToShaftPercent(switchDistance(DEFAULT_MODEL, BEGINNER_FASTEST_VALID_P), SHAFT_EXTENT);
 
 export function initElevatorUI(root: HTMLElement): void {
   const doc = root.ownerDocument;
@@ -13,8 +24,74 @@ export function initElevatorUI(root: HTMLElement): void {
   const percentageValue = predicting.querySelector<HTMLElement>('[data-testid="percentage-value"]')!;
   const runButton = predicting.querySelector<HTMLButtonElement>('[data-testid="run-button"]')!;
   const predictingBrakingMarker = predicting.querySelector<HTMLElement>('[data-testid="braking-marker"]')!;
+  const shaft = predicting.querySelector<HTMLElement>('[data-testid="shaft"]')!;
+  const hint = predicting.querySelector<HTMLElement>('[data-testid="hint"]')!;
 
   let state: UIState = initialUIState;
+  let hintState: HintState = initialHintState;
+
+  function handleRevealButtonClick(): void {
+    hintState = revealFastestValid(hintState);
+
+    hint.querySelector('[data-testid="reveal-button"]')!.remove();
+
+    const revealed = doc.createElement("p");
+    revealed.dataset.testid = "hint-revealed";
+    revealed.tabIndex = -1;
+    revealed.textContent = `The fastest valid braking point is ${BEGINNER_FASTEST_VALID_P}% of the way to the target.`;
+    hint.appendChild(revealed);
+
+    const marker = doc.createElement("div");
+    marker.dataset.testid = "fastest-valid-marker";
+    marker.className = "marker marker-fastest-valid";
+    marker.style.bottom = `${FASTEST_VALID_PERCENT}%`;
+    shaft.appendChild(marker);
+
+    revealed.focus();
+  }
+
+  function handleHintButtonClick(): void {
+    hintState = showConceptualHint(hintState);
+
+    hint.querySelector('[data-testid="hint-button"]')!.remove();
+
+    const conceptual = doc.createElement("p");
+    conceptual.dataset.testid = "hint-conceptual";
+    conceptual.tabIndex = -1;
+    conceptual.textContent = COPY.hintConceptual;
+    hint.appendChild(conceptual);
+
+    const revealButton = doc.createElement("button");
+    revealButton.type = "button";
+    revealButton.dataset.testid = "reveal-button";
+    revealButton.className = "comic-button";
+    revealButton.textContent = COPY.revealButton;
+    revealButton.addEventListener("click", handleRevealButtonClick);
+    hint.appendChild(revealButton);
+
+    conceptual.focus();
+  }
+
+  function buildHintButton(): HTMLButtonElement {
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.dataset.testid = "hint-button";
+    button.className = "comic-button";
+    button.textContent = COPY.hintButton;
+    button.addEventListener("click", handleHintButtonClick);
+    return button;
+  }
+
+  function resetHintUI(): void {
+    hintState = resetHint();
+    hint.querySelector('[data-testid="hint-conceptual"]')?.remove();
+    hint.querySelector('[data-testid="reveal-button"]')?.remove();
+    hint.querySelector('[data-testid="hint-revealed"]')?.remove();
+    shaft.querySelector('[data-testid="fastest-valid-marker"]')?.remove();
+    hint.appendChild(buildHintButton());
+  }
+
+  hint.querySelector<HTMLButtonElement>('[data-testid="hint-button"]')!.addEventListener("click", handleHintButtonClick);
 
   function renderPercentage(p: number): void {
     input.value = String(p);
@@ -48,7 +125,7 @@ export function initElevatorUI(root: HTMLElement): void {
     return shaft;
   }
 
-  function buildResultSection(attemptResult: AttemptResult): HTMLElement {
+  function buildResultSection(attemptResult: AttemptResult, hintComparison: HintComparison | undefined): HTMLElement {
     const view = resultView(attemptResult);
 
     const section = doc.createElement("section");
@@ -101,6 +178,28 @@ export function initElevatorUI(root: HTMLElement): void {
       contentCol.appendChild(minimumMessage);
     }
 
+    if (hintComparison !== undefined) {
+      const comparison = doc.createElement("div");
+      comparison.dataset.testid = "hint-comparison";
+
+      const yourBrake = doc.createElement("span");
+      yourBrake.dataset.field = "yourBrake";
+      yourBrake.textContent = `${hintComparison.yourBrake}%`;
+      comparison.appendChild(yourBrake);
+
+      const fastestValid = doc.createElement("span");
+      fastestValid.dataset.field = "fastestValid";
+      fastestValid.textContent = `${hintComparison.fastestValid}%`;
+      comparison.appendChild(fastestValid);
+
+      const hintDifference = doc.createElement("span");
+      hintDifference.dataset.field = "hintDifference";
+      hintDifference.textContent = hintComparison.differenceLabel;
+      comparison.appendChild(hintDifference);
+
+      contentCol.appendChild(comparison);
+    }
+
     resultBody.appendChild(contentCol);
     section.appendChild(resultBody);
 
@@ -114,6 +213,7 @@ export function initElevatorUI(root: HTMLElement): void {
       state = predictingState;
       section.remove();
       renderPercentage(predictingState.p);
+      resetHintUI();
       root.appendChild(predicting);
       input.focus();
     });
@@ -122,8 +222,8 @@ export function initElevatorUI(root: HTMLElement): void {
     return section;
   }
 
-  function mountResult(attemptResult: AttemptResult): void {
-    const result = buildResultSection(attemptResult);
+  function mountResult(attemptResult: AttemptResult, hintComparison: HintComparison | undefined): void {
+    const result = buildResultSection(attemptResult, hintComparison);
     root.appendChild(result);
     result.focus();
   }
@@ -213,6 +313,8 @@ export function initElevatorUI(root: HTMLElement): void {
   runButton.addEventListener("click", () => {
     const runningState = run(state);
     state = runningState;
+    const hintComparison =
+      hintState.phase === "revealed" ? buildHintComparison(runningState.p, BEGINNER_FASTEST_VALID_P) : undefined;
     predicting.remove();
 
     const reducedMotion = view.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -220,7 +322,7 @@ export function initElevatorUI(root: HTMLElement): void {
     if (reducedMotion) {
       const resultState = completeRun(runningState);
       state = resultState;
-      mountResult(resultState.result);
+      mountResult(resultState.result, hintComparison);
       return;
     }
 
@@ -258,7 +360,7 @@ export function initElevatorUI(root: HTMLElement): void {
         section.remove();
         const resultState = completeRun(runningState);
         state = resultState;
-        mountResult(resultState.result);
+        mountResult(resultState.result, hintComparison);
         return;
       }
 

@@ -131,6 +131,23 @@ describe("play.astro — range input", () => {
   });
 });
 
+describe("play.astro — hint (initial, server-rendered)", () => {
+  it("has exactly one hint-button and no conceptual/reveal/revealed/marker elements before any interaction", () => {
+    expect(doc.querySelectorAll('[data-testid="hint-button"]')).toHaveLength(1);
+    expect(required('[data-testid="hint-button"]').textContent?.trim()).toBe("STUCK? GET A HINT.");
+    expect(doc.querySelector('[data-testid="hint-conceptual"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="reveal-button"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="hint-revealed"]')).toBeNull();
+    expect(doc.querySelector('[data-testid="fastest-valid-marker"]')).toBeNull();
+  });
+
+  it("sits inside the Predicting subtree", () => {
+    const predicting = required<HTMLElement>('[data-testid="predicting"]');
+    const hintButton = required<HTMLElement>('[data-testid="hint-button"]');
+    expect(predicting.contains(hintButton)).toBe(true);
+  });
+});
+
 describe("play.astro — Run button", () => {
   it("has the approved Run button copy", () => {
     const run = buttonWithText(APPROVED_RUN_LABEL);

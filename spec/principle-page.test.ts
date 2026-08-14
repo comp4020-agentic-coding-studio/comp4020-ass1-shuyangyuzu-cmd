@@ -35,4 +35,8 @@ describe("principle.astro — route shell", () => {
   it("has no playable elevator mount root", () => {
     expect(doc.querySelector('[data-testid="elevator-app"]')).toBeNull();
   });
+
+  it("renders no hint control", () => {
+    expect(doc.querySelector('[data-testid="hint"]')).toBeNull();
+  });
 });

@@ -40,4 +40,8 @@ describe("index.astro — Home", () => {
     expect(cta, "expected a .hero-cta link").not.toBeNull();
     expect(cta?.getAttribute("href")).toBe("play.html");
   });
+
+  it("renders no hint control", () => {
+    expect(doc.querySelector('[data-testid="hint"]')).toBeNull();
+  });
 });

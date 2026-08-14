@@ -23,6 +23,9 @@ export const COPY = {
   sliderLabel: "Start braking at this percentage of the distance to the target",
   runButton: "Run",
   retryButton: "Try again",
+  hintButton: "STUCK? GET A HINT.",
+  hintConceptual: "Reaching the target is only half the job. What should the elevator's velocity be when it gets there?",
+  revealButton: "REVEAL THE FASTEST VALID BRAKING POINT",
 } as const;
 
 export function formatNumber(value: number): string {
