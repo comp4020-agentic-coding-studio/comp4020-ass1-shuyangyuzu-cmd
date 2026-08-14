@@ -1073,11 +1073,9 @@ into the always-visible prose.
    scope already stated in "Scope exclusions," restated for a reader of this
    page specifically (no mass, motor torque curve, cabling, comfort limits, or
    safety systems).
-7. **References** — the same three sources already verified and cited in
-   "Authoritative sources (mathematical claim)" below, reused verbatim as a
-   linked list; no new source is introduced, and "Liberzon" (which appears
-   only in the externally-stored planning note, never verified or cited
-   anywhere in this repository) is deliberately not added here.
+7. **References**, nested inside the same optional formal section rather than
+   as a separate always-visible section — see "Optional formal disclosure"
+   below for why.
 
 Historical or biographical claims about the puzzle's origin are out of scope
 for this section: no such claim is made anywhere in this content outline,
@@ -1100,11 +1098,26 @@ plain-language gloss rather than assumed:
 - "Pontryagin's Minimum Principle" and "phase plane" — named as, respectively,
   the classical tool used to prove the single-switch result, and the `(x,v)`
   state view in which that single-switch structure is visible geometrically.
-- A pointer to "References" below for where this is checked against the
-  literature, rather than restating citations inline.
+- **References** (the same three sources already verified and cited in
+  "Authoritative sources (mathematical claim)" below, reused verbatim as a
+  linked list; no new source is introduced, and "Liberzon" — which appears
+  only in the externally-stored planning note, never verified or cited
+  anywhere in this repository — is deliberately not added here), nested
+  inside this `<details>` rather than as a separate always-visible section.
+  This is a placement decision made after drafting, not assumed from the
+  outset: two of the three sources' own titles ("Best Approximation Optimal
+  Control for Infeasible Double Integrator...", "...Time-Optimal Control of a
+  Double Integrator... State-space Origin") literally contain restricted
+  terms as part of their real, unparaphrasable titles — a source's title is
+  quoted, never reworded, so it cannot be confined to always-visible prose
+  without breaking the vocabulary boundary this section exists to enforce.
+  Nesting References here also fits their purpose: they back the formal
+  claims made in this disclosure specifically (the bang-bang/single-switch
+  result), not the plain-language sections above it, so a visitor who never
+  opens this section has no need to see them.
 
-None of these terms appear anywhere on this page outside this one `<details>`
-element.
+None of these terms — including inside a citation's own title — appear
+anywhere on this page outside this one `<details>` element.
 
 ### Static shaft visual
 
@@ -1165,9 +1178,10 @@ element.
    control", "phase plane", "double integrator", "state-space", "switching
    function", "u(t)", case-insensitive) appear in this page's rendered text
    outside the `data-testid="formal-model"` element's own subtree.
-5. A references list exists whose links' `href`s match the three URLs already
-   listed in "Authoritative sources (mathematical claim)" below, and no
-   additional/unverified source is present.
+5. A references list, nested inside `data-testid="formal-model"`, exists
+   whose links' `href`s match the three URLs already listed in "Authoritative
+   sources (mathematical claim)" below, and no additional/unverified source
+   is present.
 6. The Home and Play pages are unaffected: `spec/home-page.test.ts` and the
    Play-page specs continue to pass unchanged, confirming this slice touched
    only the Principle route and shared, non-page-specific CSS.

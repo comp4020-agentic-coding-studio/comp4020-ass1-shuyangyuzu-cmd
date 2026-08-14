@@ -1,12 +1,140 @@
 ---
+import { DEFAULT_MODEL, switchDistance } from "../model/elevator";
+import { projectToShaftPercent, shaftDomain } from "../scripts/elevator-animation";
 import Layout from "../layouts/Layout.astro";
+
+const shaftExtent = shaftDomain(DEFAULT_MODEL);
+const targetPercent = projectToShaftPercent(DEFAULT_MODEL.H, shaftExtent);
+const switchPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, 50), shaftExtent);
 ---
 
 <Layout title="Why? — the idea behind the puzzle" current="principle">
   <main>
-    <section class="placeholder-section" aria-labelledby="principle-heading">
+    <section aria-labelledby="principle-heading">
       <h1 id="principle-heading">Why?</h1>
-      <p>Coming next.</p>
+      <p data-testid="principle-intro">
+        Every time an elevator answers a call, it solves this same problem: get to the right floor, and be completely
+        still when the doors open. Nobody riding it thinks of this as an optimisation problem — it just happens,
+        smoothly, every time. This page is about what's actually being solved underneath that smoothness, and why the
+        fastest possible journey isn't what you might guess at first.
+      </p>
+
+      <div class="principle-layout">
+        <figure class="principle-visual" data-testid="principle-visual">
+          <div class="shaft-col">
+            <div class="shaft" aria-hidden="true">
+              <div
+                data-testid="principle-target-marker"
+                class="marker marker-target"
+                style={`bottom: ${targetPercent}%;`}
+              >
+              </div>
+              <div
+                data-testid="principle-switch-marker"
+                class="marker marker-fastest-valid"
+                style={`bottom: ${switchPercent}%;`}
+              >
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            The switch point sits exactly halfway between the start and the target — see "Why the answer is exactly
+            halfway" below.
+          </figcaption>
+        </figure>
+
+        <div class="principle-content">
+          <section aria-labelledby="arrival-heading">
+            <h2 id="arrival-heading">Reaching the floor isn't the same as arriving</h2>
+            <p>
+              On the Play page, a run that lands exactly on the target floor while still moving isn't a success — the
+              elevator has to be at rest, not just in the right place, when it gets there. Two things are always
+              changing during the trip: where the elevator is, and how fast it's moving. Reaching the target position
+              while still moving means it's about to overshoot; stopping too soon means being at rest short of the
+              target. Being exactly at the target with exactly zero speed is the one state that counts as arrival.
+            </p>
+          </section>
+
+          <section aria-labelledby="switch-heading">
+            <h2 id="switch-heading">Why full power one way, then full power the other, is fastest</h2>
+            <p>
+              If the only goal were speed, wasting any time not accelerating would be time never recovered. But
+              arrival also requires the elevator to be at rest at the target, so it can't accelerate the whole way —
+              whatever speed it builds up has to be shed again before it gets there, by braking just as hard. Easing
+              off early, coasting, or braking gently instead of fully all take longer to reach the same state. So the
+              fastest possible journey is: accelerate at the maximum rate for as long as possible, then switch to
+              braking at the maximum rate, timed so the elevator arrives at the target exactly as its speed reaches
+              zero. There's exactly one moment to make that switch — switch earlier and the elevator stops short;
+              switch later and it's still moving when it reaches the target.
+            </p>
+          </section>
+
+          <section aria-labelledby="halfway-heading">
+            <h2 id="halfway-heading">Why the answer is exactly halfway</h2>
+            <p>
+              For this elevator, the maximum acceleration and the maximum braking are equally strong. Speeding up and
+              slowing down are then exact mirror images of each other: reaching a given speed by accelerating takes
+              exactly as much distance as shedding that same speed by braking. So the switch has to happen exactly
+              halfway between the start and the target — the same {"50%"} the Play page's hint reveals. With this model's
+              numbers ({DEFAULT_MODEL.H} m, {DEFAULT_MODEL.a} m/s²), that switch happens at 5 m, reaching a top speed
+              of about 3.87 m/s, for a fastest possible journey of about 5.16 s.
+            </p>
+          </section>
+
+          <details data-testid="formal-model">
+            <summary>For the mathematically curious</summary>
+            <p>Stated formally, in the language of control theory:</p>
+            <pre>ẋ = v
+v̇ = u,  |u| ≤ a
+x(0) = 0, v(0) = 0
+x(T) = H, v(T) = 0
+minimise T</pre>
+            <p>
+              This is a <em>double integrator</em> — position is the double integral of a bounded control input. The
+              result that the fastest control switches at most once, from full acceleration to full braking, is a
+              classical result in optimal control theory, provable using Pontryagin's Minimum Principle. Because the
+              optimal <em>u(t)</em> only ever takes its extreme values (`+a` or `-a`), this kind of solution is called
+              <em>bang-bang control</em>. Analysing it directly in the position/velocity state-space, sometimes called
+              the phase plane, makes the single-switch structure visible geometrically as well as algebraically. See
+              References at the end of this section for the sources this page's model was checked against.
+            </p>
+            <h3 id="references-heading">References</h3>
+            <ul data-testid="principle-references">
+              <li>
+                <a href="http://underactuated.mit.edu/dp.html">
+                  Tedrake, Russ. <cite>Underactuated Robotics</cite>, Chapter 7: "Dynamic Programming" (MIT course
+                  notes).
+                </a>
+              </li>
+              <li>
+                <a href="https://arxiv.org/abs/2602.07851">
+                  Burachik, Caldwell, Kaya, Moursi. "Best Approximation Optimal Control for Infeasible Double
+                  Integrator and Douglas–Rachford Algorithm." arXiv:2602.07851.
+                </a>
+              </li>
+              <li>
+                <a href="https://arxiv.org/abs/1909.03192">
+                  Romano, Curti. "Analytic Solution of the Time-Optimal Control of a Double Integrator from an
+                  Arbitrary State to the State-space Origin." arXiv:1909.03192.
+                </a>
+              </li>
+            </ul>
+          </details>
+
+          <section aria-labelledby="real-heading">
+            <h2 id="real-heading">How this compares to a real elevator</h2>
+            <p>
+              This page and the Play interface both use a deliberately simplified model: a single point that speeds
+              up and slows down at a constant rate, with no mass, motor behaviour, cabling, ride comfort, or safety
+              systems taken into account. A real elevator's motor has torque and speed limits that change with load,
+              its acceleration is smoothed for passenger comfort rather than snapping instantly to a maximum, and
+              safety systems constrain how it behaves near floors. The idealised model here isn't a claim about how
+              real elevator controllers work — it's a simplified version of the same underlying puzzle, chosen
+              because it has an exact, checkable answer.
+            </p>
+          </section>
+        </div>
+      </div>
     </section>
   </main>
 </Layout>
