@@ -1,0 +1,38 @@
+---
+interface Props {
+  current: "home" | "play" | "principle";
+}
+
+const { current } = Astro.props;
+---
+
+<header>
+  <nav aria-label="Primary" class="site-nav">
+    <a href="index.html" class="site-nav-link" aria-current={current === "home" ? "page" : undefined}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" class="site-nav-icon">
+        <path
+          d="M4 12 L12 5 L20 12 M6 11 V20 H18 V11"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span>HOME</span>
+    </a>
+    <a href="play.html" class="site-nav-link" aria-current={current === "play" ? "page" : undefined}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" class="site-nav-icon">
+        <rect x="5" y="6" width="14" height="14" rx="1" fill="none" stroke="currentColor" stroke-width="2" />
+        <path d="M5 12 H19 M12 6 V20" stroke="currentColor" stroke-width="2" />
+      </svg>
+      <span>PLAY</span>
+    </a>
+    <a href="principle.html" class="site-nav-link" aria-current={current === "principle" ? "page" : undefined}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" class="site-nav-icon">
+        <path d="M13 2 L6 13 H11 L9 22 L18 10 H13 Z" fill="currentColor" />
+      </svg>
+      <span>WHY?</span>
+    </a>
+  </nav>
+</header>

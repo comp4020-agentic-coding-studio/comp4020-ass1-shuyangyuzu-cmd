@@ -1,11 +1,13 @@
 ---
 import "../styles/global.css";
+import SiteHeader from "../components/SiteHeader.astro";
 
 interface Props {
   title: string;
+  current: "home" | "play" | "principle";
 }
 
-const { title } = Astro.props;
+const { title, current } = Astro.props;
 ---
 
 <!doctype html>
@@ -16,6 +18,7 @@ const { title } = Astro.props;
     <title>{title}</title>
   </head>
   <body>
+    <SiteHeader current={current} />
     <slot />
   </body>
 </html>

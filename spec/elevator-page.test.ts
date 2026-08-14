@@ -1,20 +1,21 @@
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
-import IndexPage from "../src/pages/index.astro";
+import PlayPage from "../src/pages/play.astro";
 
-// Test-first slice: index.astro still has starter markup. Every assertion
-// below is expected to fail except the ones noted in the review as
-// inherited-invariant passes — see INTERACTION.md "DOM/Astro red-test scope"
-// items 1-3 (static contract only; Run/Result/Retry behaviour is Slice B).
+// This suite originally targeted index.astro before the three-route
+// migration moved the Beginner game to play.astro (Home is now a separate,
+// non-playable route — see spec/home-page.test.ts). The assertions below are
+// unchanged from that migration, only the rendered page and its describe
+// labels were repointed.
 //
 // The approved-copy constants below are pinned directly from INTERACTION.md
 // "Approved novice copy", not imported from COPY/DISCLAIMER. This is
 // deliberate contract pinning, not an accidental duplicate source: COPY and
-// DISCLAIMER stay the one production source of truth once index.astro
-// imports them in the green phase, and this test checks production against
-// the approved contract text independently, so drift between the two would
-// fail here rather than passing by construction.
+// DISCLAIMER stay the one production source of truth once play.astro imports
+// them, and this test checks production against the approved contract text
+// independently, so drift between the two would fail here rather than
+// passing by construction.
 const APPROVED_HEADING = "Bring the elevator to a stop at the target";
 const APPROVED_TASK =
   "Choose where the elevator should start braking, then run it. The goal isn't just to reach the target — it must be completely stopped when it gets there.";
@@ -40,7 +41,7 @@ let doc: Document;
 
 beforeAll(async () => {
   const container = await AstroContainer.create();
-  const html = await container.renderToString(IndexPage, { partial: false });
+  const html = await container.renderToString(PlayPage, { partial: false });
   doc = new JSDOM(html).window.document;
 });
 
@@ -54,7 +55,7 @@ function buttonWithText(text: string): HTMLButtonElement | null {
   return [...doc.querySelectorAll("button")].find((b) => b.textContent?.trim() === text) ?? null;
 }
 
-describe("index.astro — navigation and heading", () => {
+describe("play.astro — navigation and heading", () => {
   it("keeps the nav landmark", () => {
     expect(doc.querySelector('nav[aria-label="Primary"]')).not.toBeNull();
   });
@@ -74,7 +75,7 @@ describe("index.astro — navigation and heading", () => {
   });
 });
 
-describe("index.astro — phase mount root and Predicting subtree", () => {
+describe("play.astro — phase mount root and Predicting subtree", () => {
   it("has exactly one elevator-app root", () => {
     expect(doc.querySelectorAll('[data-testid="elevator-app"]')).toHaveLength(1);
   });
@@ -87,7 +88,7 @@ describe("index.astro — phase mount root and Predicting subtree", () => {
   });
 });
 
-describe("index.astro — Result, Retry, and formal disclosure are absent", () => {
+describe("play.astro — Result, Retry, and formal disclosure are absent", () => {
   it("renders no Result subtree", () => {
     expect(doc.querySelector('[data-testid="result"]')).toBeNull();
   });
@@ -108,7 +109,7 @@ describe("index.astro — Result, Retry, and formal disclosure are absent", () =
   });
 });
 
-describe("index.astro — range input", () => {
+describe("play.astro — range input", () => {
   it("has min=1, max=100, step=1, and the approved initial value", () => {
     const input = required<HTMLInputElement>('input[type="range"]');
     expect(input.min).toBe("1");
@@ -130,14 +131,14 @@ describe("index.astro — range input", () => {
   });
 });
 
-describe("index.astro — Run button", () => {
+describe("play.astro — Run button", () => {
   it("has the approved Run button copy", () => {
     const run = buttonWithText(APPROVED_RUN_LABEL);
     expect(run, `expected a <button> with text "${APPROVED_RUN_LABEL}"`).not.toBeNull();
   });
 });
 
-describe("index.astro — permanent disclaimer", () => {
+describe("play.astro — permanent disclaimer", () => {
   it("matches the approved disclaimer copy exactly", () => {
     const disclaimer = required('[data-testid="disclaimer"]');
     expect(disclaimer.textContent?.trim()).toBe(APPROVED_DISCLAIMER);

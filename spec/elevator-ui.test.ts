@@ -4,26 +4,24 @@ import { describe, expect, it } from "vitest";
 import { buildAttemptResult, DEFAULT_MODEL } from "../src/model/elevator";
 import { initElevatorUI } from "../src/scripts/elevator-dom";
 import { DISCLAIMER, resultView } from "../src/scripts/elevator-view";
-import IndexPage from "../src/pages/index.astro";
+import PlayPage from "../src/pages/play.astro";
 
-// Test-first slice: src/scripts/elevator-dom.ts does not exist yet. This file
-// is red at module resolution (astro check / vitest both fail to find the
-// import). That is intentional: spec/elevator-page.test.ts already covers and
-// independently commits the static page contract (commits ab17d47/c991956),
-// so this module-resolution failure masks no page-contract evidence.
-//
-// Bootstrap boundary: Astro Container renders the real index.astro, but
+// Bootstrap boundary: Astro Container renders the real play.astro, but
 // JSDOM never executes its <script src="../scripts/main.ts"> tag. Every test
 // below calls initElevatorUI(root) directly, so it proves (a) the real
 // server-rendered page supplies the correct root, and (b) elevator-dom wires
 // and transitions that real markup correctly. It does NOT prove that
-// index.astro's <script> tag loads main.ts in a deployed browser, or that
+// play.astro's <script> tag loads main.ts in a deployed browser, or that
 // main.ts calls initElevatorUI. That bootstrap wiring is deferred to
 // browser/manual verification, not covered by this JSDOM component slice.
+//
+// This suite originally rendered index.astro before the three-route
+// migration moved the Beginner game to play.astro; only the rendered page
+// changed, not the assertions.
 
-async function renderIndexPage(): Promise<JSDOM> {
+async function renderPlayPage(): Promise<JSDOM> {
   const container = await AstroContainer.create();
-  const html = await container.renderToString(IndexPage, { partial: false });
+  const html = await container.renderToString(PlayPage, { partial: false });
   return new JSDOM(html);
 }
 
@@ -54,7 +52,7 @@ function preferReducedMotion(jsdom: JSDOM): void {
 
 describe("initElevatorUI — percentage display", () => {
   it("updates the visible percentage text as the range input changes", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);
@@ -69,7 +67,7 @@ describe("initElevatorUI — percentage display", () => {
 
 describe("Run", () => {
   it("detaches Predicting, creates a live-region Result, and moves focus to it", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);
@@ -89,7 +87,7 @@ describe("Run", () => {
   });
 
   it.each([20, 50, 65])("renders Result content matching resultView for p=%i", async (p) => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);
@@ -126,7 +124,7 @@ describe("Run", () => {
   });
 
   it("never renders targetCrossingTime", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);
@@ -143,7 +141,7 @@ describe("Run", () => {
 
 describe("Retry", () => {
   it("removes Result, reattaches the retained Predicting node with p preserved, and returns focus to the range input", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);
@@ -166,7 +164,7 @@ describe("Retry", () => {
 
 describe("repeated Run -> Retry cycles", () => {
   it("locks a distinct p on each of two consecutive cycles", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);
@@ -189,7 +187,7 @@ describe("repeated Run -> Retry cycles", () => {
 
 describe("disclaimer and formal disclosure", () => {
   it("keeps the disclaimer unchanged outside the phase root through Run and Retry", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     initElevatorUI(root);
     preferReducedMotion(jsdom);

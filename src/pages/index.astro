@@ -1,53 +1,23 @@
 ---
-import { DEFAULT_MODEL, switchDistance } from "../model/elevator";
-import { projectToShaftPercent, shaftDomain } from "../scripts/elevator-animation";
 import Layout from "../layouts/Layout.astro";
-import { initialUIState } from "../scripts/elevator-controller";
-import { COPY, DISCLAIMER } from "../scripts/elevator-view";
-
-const shaftExtent = shaftDomain(DEFAULT_MODEL);
-const targetPercent = projectToShaftPercent(DEFAULT_MODEL.H, shaftExtent);
-const carPercent = projectToShaftPercent(0, shaftExtent);
-const brakingPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, initialUIState.p), shaftExtent);
 ---
 
-<Layout title={COPY.heading}>
-  <header>
-    <nav aria-label="Primary">
-      <a href="./">Home</a>
-    </nav>
-  </header>
+<Layout title="How late can you brake?" current="home">
   <main>
-    <h1>{COPY.heading}</h1>
-    <p data-testid="task">{COPY.task}</p>
-    <div data-testid="elevator-app">
-      <section data-testid="predicting" class="panel">
-        <div class="shaft-col">
-          <div data-testid="shaft" class="shaft">
-            <div data-testid="target-marker" class="marker marker-target" style={`bottom: ${targetPercent}%;`}>
-            </div>
-            <div data-testid="braking-marker" class="marker marker-braking" style={`bottom: ${brakingPercent}%;`}>
-            </div>
-            <div data-testid="car" class="car" style={`bottom: ${carPercent}%;`}></div>
-          </div>
+    <section class="hero" aria-label="Introduction">
+      <div class="hero-art" aria-hidden="true">
+        <div class="hero-floor-line hero-floor-line-1"></div>
+        <div class="hero-floor-line hero-floor-line-2"></div>
+        <div class="hero-floor-line hero-floor-line-3"></div>
+        <div class="hero-cargo"></div>
+        <div class="hero-car">
+          <span class="hero-car-cable"></span>
         </div>
-        <div class="content-col">
-          <label for="percentage-input">{COPY.sliderLabel}</label>
-          <input
-            id="percentage-input"
-            data-testid="percentage-input"
-            type="range"
-            min="1"
-            max="100"
-            step="1"
-            value={initialUIState.p}
-          />
-          <span data-testid="percentage-value">{initialUIState.p}%</span>
-          <button type="button" data-testid="run-button" class="comic-button">{COPY.runButton}</button>
-        </div>
-      </section>
-    </div>
-    <p data-testid="disclaimer">{DISCLAIMER}</p>
+      </div>
+      <p class="hero-eyebrow">AN ELEVATOR. ONE TARGET. NO TIME TO WASTE.</p>
+      <h1 class="hero-heading">HOW LATE CAN YOU BRAKE?</h1>
+      <p class="hero-body">Getting to the floor is easy. Arriving completely stopped is the puzzle.</p>
+      <a href="play.html" class="comic-button hero-cta">TAKE THE ELEVATOR</a>
+    </section>
   </main>
-  <script src="../scripts/main.ts"></script>
 </Layout>

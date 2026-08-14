@@ -68,3 +68,19 @@ describe("invariants: home page", () => {
     expect(home).toBeTruthy();
   });
 });
+
+describe("invariants: play page", () => {
+  const play = pages.find(({ name }) => name === "play.html");
+
+  it("exists", () => {
+    expect(play).toBeTruthy();
+  });
+});
+
+describe("invariants: principle page", () => {
+  const principle = pages.find(({ name }) => name === "principle.html");
+
+  it("exists", () => {
+    expect(principle).toBeTruthy();
+  });
+});

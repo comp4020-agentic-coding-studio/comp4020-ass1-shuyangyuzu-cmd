@@ -13,7 +13,7 @@ import {
 import { projectToShaftPercent, shaftDomain, visualDuration } from "../src/scripts/elevator-animation";
 import { initElevatorUI } from "../src/scripts/elevator-dom";
 import { resultView } from "../src/scripts/elevator-view";
-import IndexPage from "../src/pages/index.astro";
+import PlayPage from "../src/pages/play.astro";
 
 // Test-first slice: src/scripts/elevator-animation.ts does not exist yet,
 // and elevator-dom.ts does not yet build a shaft, target/braking markers, a
@@ -42,9 +42,9 @@ const FORBIDDEN_TERMS = [
   "u(t)",
 ];
 
-async function renderIndexPage(): Promise<JSDOM> {
+async function renderPlayPage(): Promise<JSDOM> {
   const container = await AstroContainer.create();
-  const html = await container.renderToString(IndexPage, { partial: false });
+  const html = await container.renderToString(PlayPage, { partial: false });
   return new JSDOM(html);
 }
 
@@ -162,7 +162,7 @@ function drainUntilResult(root: HTMLElement, raf: FakeRaf, maxExtraFrames = 10):
 
 describe("Predicting shaft visual", () => {
   it("renders a shaft with the target marker fixed at 50% and the car visibly at 0 m, independent of p", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     initElevatorUI(root);
@@ -177,7 +177,7 @@ describe("Predicting shaft visual", () => {
   });
 
   it("projects the braking marker to switchDistance(model, p) as a CSS bottom percentage at the initial p", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     initElevatorUI(root);
@@ -189,7 +189,7 @@ describe("Predicting shaft visual", () => {
   });
 
   it("moves the braking marker on the slider's input event without a Run", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     initElevatorUI(root);
@@ -207,7 +207,7 @@ describe("Predicting shaft visual", () => {
 
 describe("Running — entering the phase", () => {
   it("detaches Predicting, removes the percentage input/Run/Retry controls, and keeps the permanent navigation", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     installFakeRaf(jsdom);
@@ -230,7 +230,7 @@ describe("Running — entering the phase", () => {
 
 describe("Running car projection at analytic sampled instants", () => {
   it("projects the car's CSS bottom percentage to match positionAt at t=0, switchTime, and an interior overshoot instant", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     const raf = installFakeRaf(jsdom);
@@ -280,7 +280,7 @@ describe("Running car projection at analytic sampled instants", () => {
 
 describe("Session-relative wall-clock origin on a document timeline already past visualDurationMs", () => {
   it("renders analytic t=0 on the first frame instead of jumping to Result, when the document clock starts well beyond visualDurationMs", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     // The document timeline is already at 60_000ms — far beyond any
@@ -323,7 +323,7 @@ describe("Session-relative wall-clock origin on a document timeline already past
 
 describe("Running position/velocity readouts", () => {
   it("shows position beyond H and positive velocity for an overshoot p at an interior instant between crossingTime and stopTime", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     const raf = installFakeRaf(jsdom);
@@ -361,7 +361,7 @@ describe("Accelerating/braking cue", () => {
   // both view states — at two unambiguous analytic interior times, one
   // strictly before switchTime and one strictly after it.
   it("wires the accelerating cue before the switch and braking cue after it", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     const raf = installFakeRaf(jsdom);
@@ -399,7 +399,7 @@ describe("Completion reaches Result matching resultView", () => {
     ["correct", 50],
     ["overshoot", 80],
   ] as const)("completes to Result for %s p=%i", async (_label, p) => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     const raf = installFakeRaf(jsdom);
@@ -424,7 +424,7 @@ describe("Completion reaches Result matching resultView", () => {
 
 describe("Reduced motion", () => {
   it("reaches Result synchronously with zero requestAnimationFrame calls", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     preferReducedMotion(jsdom);
     const raf = installFakeRaf(jsdom);
@@ -446,7 +446,7 @@ describe("Reduced motion", () => {
   it("produces a Result identical to the animated path for the same p", async () => {
     const p = 65;
 
-    const animatedJsdom = await renderIndexPage();
+    const animatedJsdom = await renderPlayPage();
     const animatedRoot = required<HTMLElement>(animatedJsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(animatedJsdom);
     const raf = installFakeRaf(animatedJsdom);
@@ -460,7 +460,7 @@ describe("Reduced motion", () => {
     drainUntilResult(animatedRoot, raf);
     const animatedResult = required<HTMLElement>(animatedRoot, '[data-testid="result"]');
 
-    const reducedJsdom = await renderIndexPage();
+    const reducedJsdom = await renderPlayPage();
     const reducedRoot = required<HTMLElement>(reducedJsdom.window.document, '[data-testid="elevator-app"]');
     preferReducedMotion(reducedJsdom);
     installFakeRaf(reducedJsdom);
@@ -488,7 +488,7 @@ describe("Reduced motion", () => {
 
 describe("Stale queued animation callback after Result", () => {
   it("cannot mutate or duplicate Result when invoked directly after Result has already been reached", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     const raf = installFakeRaf(jsdom);
@@ -531,7 +531,7 @@ describe("Stale queued animation callback after Result", () => {
 
 describe("Forbidden vocabulary", () => {
   it("is absent from the Running subtree introduced by this slice", async () => {
-    const jsdom = await renderIndexPage();
+    const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
     allowMotion(jsdom);
     installFakeRaf(jsdom);
