@@ -1014,6 +1014,169 @@ export function buildHintComparison(p: number, fastestValidP: number): HintCompa
 11. Home and Principle render no element with `data-testid="hint"` (or any of
     its descendants' testids) anywhere in their built pages.
 
+## Principle page — content and layout contract (approved)
+
+`[Approved design decision]`
+
+Scope: `src/pages/principle.astro` (route 3 of the 3-route site — see the
+saved migration plan's revision note; there is no `play-advanced.astro`, and
+Principle is a standalone read, not part of the Predicting/Running/Result
+state machine above). This section supersedes the page's current placeholder
+("Coming next").
+
+### Purpose and relationship to Play
+
+Principle explains, in prose, the same idealised model already specified in
+"Verified model and formulas" and "Model constants and units" — it introduces
+no new physics, no new formulas, and no new constants. Its one interactive-ish
+element is a static, non-interactive reuse of the existing shaft visual
+(`projectToShaftPercent`/`shaftDomain`/`switchDistance`, "Shaft visual and
+coordinate system") to illustrate the switch point discussed in prose; it has
+no range input, no Run/Retry, no Hint, and no `data-testid="elevator-app"` or
+`data-testid="hint"` anywhere on the page (already asserted by
+`spec/principle-page.test.ts`; this section does not change that boundary, it
+documents the content now filling the rest of the page around it).
+
+The vocabulary restriction in "Audience and progressive disclosure" is scoped
+to *default-visible Play UI* — Principle is a separate, opted-into page, so
+that restriction does not apply to it wholesale. But the same section's
+underlying principle (a novice must never be required to already know a term
+to follow the page) still applies here in a weaker form: every specialist term
+this page introduces is either explained in plain language at first use, or
+confined to the optional formal disclosure below, never dropped unexplained
+into the always-visible prose.
+
+### Content outline (progressive, in this order)
+
+1. **An everyday puzzle** — plain-language framing: an elevator answering a
+   call solves this same problem on every trip, without anyone noticing it as
+   an optimisation problem.
+2. **Reaching the floor isn't the same as arriving** — restates "Point of
+   view" for a reader arriving fresh at this page (not assumed to have read
+   Play first): position and velocity are two different quantities, and
+   arrival requires both the right position and zero velocity together.
+3. **Why full power one way, then full power the other, is fastest** — the
+   plain-language intuition for the switched bang-bang structure, without
+   naming it: wasted time not accelerating is never recovered, whatever speed
+   is built up must be shed again before the target, and there is exactly one
+   correct moment to switch from accelerating to braking.
+4. **Why the answer is exactly halfway** — because the acceleration and
+   braking limits are equal (both `a`), accelerating to a given speed and
+   shedding that same speed take equal distance, so the switch falls exactly
+   at the midpoint. States the already-verified reference values from "Model
+   constants and units" (`s*=H/2=5 m`, `v*=√(aH)=√15≈3.87 m/s`,
+   `T*=2√(H/a)=2√(20/3)≈5.16 s`) — no new derivation, direct reuse.
+5. **An optional formal section**, `<details data-testid="formal-model">` /
+   `<summary>`, collapsed/closed by default (no `open` attribute) — see
+   "Optional formal disclosure" below.
+6. **How this compares to a real elevator** — the same idealised-point-mass
+   scope already stated in "Scope exclusions," restated for a reader of this
+   page specifically (no mass, motor torque curve, cabling, comfort limits, or
+   safety systems).
+7. **References** — the same three sources already verified and cited in
+   "Authoritative sources (mathematical claim)" below, reused verbatim as a
+   linked list; no new source is introduced, and "Liberzon" (which appears
+   only in the externally-stored planning note, never verified or cited
+   anywhere in this repository) is deliberately not added here.
+
+Historical or biographical claims about the puzzle's origin are out of scope
+for this section: no such claim is made anywhere in this content outline,
+since none of the three verified sources establishes one, and this repo's
+`CLAUDE.md` prohibits inventing one to fill the gap.
+
+### Optional formal disclosure
+
+The `<details>` element from item 5 above is the one place on this page where
+the terms restricted elsewhere may appear, each introduced with a one-clause
+plain-language gloss rather than assumed:
+
+- The formal statement of the model (identical to the block already given in
+  "Verified model and formulas" — not restated with different symbols).
+- "Double integrator" — introduced as the name for a system where position is
+  the double integral of a bounded control input.
+- "Bang-bang control" — introduced as the name for a control that only ever
+  takes its extreme values, which is what the switched full-acceleration/
+  full-braking solution is an instance of.
+- "Pontryagin's Minimum Principle" and "phase plane" — named as, respectively,
+  the classical tool used to prove the single-switch result, and the `(x,v)`
+  state view in which that single-switch structure is visible geometrically.
+- A pointer to "References" below for where this is checked against the
+  literature, rather than restating citations inline.
+
+None of these terms appear anywhere on this page outside this one `<details>`
+element.
+
+### Static shaft visual
+
+- Reuses the identical shaft markup pattern and CSS classes already
+  established for Play's `data-testid="shaft"` (`.shaft`, `.marker`,
+  `.marker-target`, `.marker-fastest-valid`) — no new visual language, no new
+  coordinate math.
+- Frontmatter computes `shaftDomain(DEFAULT_MODEL)`, the target's percentage
+  via `projectToShaftPercent(DEFAULT_MODEL.H, extent)`, and the switch
+  point's percentage via
+  `projectToShaftPercent(switchDistance(DEFAULT_MODEL, 50), extent)` — the
+  same `50` as `BEGINNER_FASTEST_VALID_P`, reused as a literal here since this
+  page has no hint module dependency of its own.
+- Rendered once, statically, in server-rendered markup — no script import, no
+  `initElevatorUI`, no interactivity, no `data-testid="elevator-app"`.
+- Wrapped in a non-interactive `<figure>` (or `<aside>`) carrying
+  `data-testid="principle-visual"`, distinct from Play's `data-testid="shaft"`
+  parent (`data-testid="predicting"`/`"running"`) so a structural test can
+  assert the two pages' visuals independently.
+
+### Responsive layout
+
+- On viewports `width >= 40rem`, the explanation content and the static visual
+  sit side by side, with the visual column sticky (`position: sticky`) so it
+  stays in view while the explanation scrolls past it — mirroring the same
+  `@media (width >= 40rem)` breakpoint already used for Predicting/Running/
+  Result's two-column layout, not a new breakpoint value.
+- Below that width, the two stack into a single column (no CSS `position:
+  sticky` effect is meaningful in a single-column stacked reading order).
+- This is a CSS layout change only; the DOM order of the visual relative to
+  the content sections is fixed regardless of viewport (no JS-driven
+  reordering) — the visual precedes the content sections in source order, so
+  a phone reader sees the illustration before the prose that refers to it,
+  and a wide-viewport reader sees them side by side via `grid-column`
+  placement rather than DOM reordering.
+- Real sticky-scroll behaviour in an actual browser (does the visual actually
+  stay pinned as the page scrolls, at both marking viewports) is a
+  browser-level/manual check, not something JSDOM's layout-free DOM can
+  verify — see "Browser-level and manual checks."
+
+### Principle page tests (this slice)
+
+`[Approved design decision]` for every item below.
+
+1. The rendered page has exactly one `<h1>` and no
+   `data-testid="elevator-app"` or `data-testid="hint"` element anywhere
+   (extends the existing `spec/principle-page.test.ts` assertions to the real
+   content, not just the placeholder).
+2. Exactly one `data-testid="principle-visual"` element exists, containing a
+   target marker and a switch-point marker whose CSS `bottom` percentages
+   equal `projectToShaftPercent(DEFAULT_MODEL.H, shaftDomain(DEFAULT_MODEL))`
+   and `projectToShaftPercent(switchDistance(DEFAULT_MODEL, 50),
+   shaftDomain(DEFAULT_MODEL))` respectively — the same projection function
+   already used and tested for Play, applied to the same `DEFAULT_MODEL`.
+3. `data-testid="formal-model"` is a `<details>` element without an `open`
+   attribute (closed by default) containing a `<summary>`.
+4. None of the restricted terms ("bang-bang", "Pontryagin", "optimal
+   control", "phase plane", "double integrator", "state-space", "switching
+   function", "u(t)", case-insensitive) appear in this page's rendered text
+   outside the `data-testid="formal-model"` element's own subtree.
+5. A references list exists whose links' `href`s match the three URLs already
+   listed in "Authoritative sources (mathematical claim)" below, and no
+   additional/unverified source is present.
+6. The Home and Play pages are unaffected: `spec/home-page.test.ts` and the
+   Play-page specs continue to pass unchanged, confirming this slice touched
+   only the Principle route and shared, non-page-specific CSS.
+
+Real sticky/stacked rendering at both marking viewports is a manual/browser
+check (see "Browser-level and manual checks"), not asserted by any test above
+— JSDOM has no layout engine and cannot verify `position: sticky` or actual
+column placement.
+
 ## Acceptance criteria
 
 Each item is tagged `[Published spec]` (with the supporting quote),
