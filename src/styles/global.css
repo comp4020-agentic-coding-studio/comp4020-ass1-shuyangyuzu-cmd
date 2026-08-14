@@ -22,7 +22,8 @@
 
 body {
   margin: 0;
-  padding: clamp(1rem, 4vw, 2rem);
+  padding-block: max(clamp(0.75rem, 2vw, 1.25rem), env(safe-area-inset-top)) clamp(1rem, 4vw, 2rem);
+  padding-inline: clamp(1rem, 4vw, 2rem);
   font-family: var(--font-body);
   line-height: 1.6;
   color: var(--ink);
@@ -103,6 +104,8 @@ h1 {
 /* The shaft is the dominant illustration: a cutaway building facade. */
 [data-testid="predicting"],
 [data-testid="running"],
+[data-testid="advanced-predicting"],
+[data-testid="advanced-running"],
 .result-body {
   display: grid;
   grid-template-columns: 1fr;
@@ -123,14 +126,41 @@ h1 {
 }
 
 [data-testid="predicting"] .content-col,
-[data-testid="running"] .content-col {
+[data-testid="running"] .content-col,
+[data-testid="advanced-predicting"] .content-col,
+[data-testid="advanced-running"] .content-col {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-[data-testid="predicting"] label {
+[data-testid="predicting"] label,
+[data-testid="advanced-predicting"] label {
   font-weight: 600;
+}
+
+[data-testid="advanced-predicting"] label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.advanced-percentage-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  inline-size: 100%;
+}
+
+.advanced-field-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.advanced-field-group {
+  min-width: 0;
 }
 
 input[type="range"] {
@@ -365,6 +395,8 @@ section[data-testid="running"]:has([data-cue="braking"]) .car::after {
 @media (width >= 40rem) {
   [data-testid="predicting"],
   [data-testid="running"],
+  [data-testid="advanced-predicting"],
+  [data-testid="advanced-running"],
   .result-body {
     grid-template-columns: minmax(14rem, 42%) 1fr;
     gap: 2rem;
@@ -375,10 +407,20 @@ section[data-testid="running"]:has([data-cue="braking"]) .car::after {
     margin-inline: 0;
   }
 
+  [data-testid="advanced-predicting"] .content-col {
+    max-inline-size: none;
+  }
+
   .shaft {
     inline-size: 100%;
     max-inline-size: 22rem;
     block-size: clamp(22rem, 56vh, 34rem);
+  }
+
+  .advanced-field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 1rem;
   }
 }
 

@@ -813,6 +813,10 @@ export function initElevatorUI(root: HTMLElement): void {
     task.textContent = COPY.advancedTask;
     contentCol.appendChild(task);
 
+    const fieldGrid = doc.createElement("div");
+    fieldGrid.className = "advanced-field-grid";
+    contentCol.appendChild(fieldGrid);
+
     function buildNumberField(
       testid: string,
       labelText: string,
@@ -822,6 +826,8 @@ export function initElevatorUI(root: HTMLElement): void {
       value: string,
       field: "H" | "a" | "b",
     ): void {
+      const group = doc.createElement("div");
+      group.className = "advanced-field-group";
       const label = doc.createElement("label");
       label.textContent = labelText;
       const numberInput = doc.createElement("input");
@@ -833,7 +839,8 @@ export function initElevatorUI(root: HTMLElement): void {
       numberInput.value = value;
       numberInput.addEventListener("input", () => handleAdvancedModelFieldChange(field, numberInput.value));
       label.appendChild(numberInput);
-      contentCol.appendChild(label);
+      group.appendChild(label);
+      fieldGrid.appendChild(group);
     }
 
     buildNumberField("advanced-h-input", "Building height (m)", "5", "20", "1", String(model.H), "H");
@@ -854,6 +861,8 @@ export function initElevatorUI(root: HTMLElement): void {
 
     const numberLabel = doc.createElement("label");
     numberLabel.appendChild(doc.createTextNode("Exact braking percentage "));
+    const percentageRow = doc.createElement("span");
+    percentageRow.className = "advanced-percentage-row";
     advancedPercentageInput = doc.createElement("input");
     advancedPercentageInput.type = "number";
     advancedPercentageInput.dataset.testid = "advanced-percentage-number-input";
@@ -861,11 +870,12 @@ export function initElevatorUI(root: HTMLElement): void {
     advancedPercentageInput.max = "100";
     advancedPercentageInput.step = "0.01";
     advancedPercentageInput.value = formatNumber(advancedState.p);
-    numberLabel.appendChild(advancedPercentageInput);
+    percentageRow.appendChild(advancedPercentageInput);
     const percentSuffix = doc.createElement("span");
     percentSuffix.setAttribute("aria-hidden", "true");
     percentSuffix.textContent = "%";
-    numberLabel.appendChild(percentSuffix);
+    percentageRow.appendChild(percentSuffix);
+    numberLabel.appendChild(percentageRow);
     contentCol.appendChild(numberLabel);
 
     advancedInput.addEventListener("input", () => {
