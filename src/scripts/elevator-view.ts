@@ -50,7 +50,7 @@ export function formatNumber(value: number): string {
 
 const HEADINGS: Record<AttemptResult["classification"], string> = {
   short: "Too early",
-  correct: "Exactly right",
+  correct: "Exactly right!",
   overshoot: "Too late",
 };
 

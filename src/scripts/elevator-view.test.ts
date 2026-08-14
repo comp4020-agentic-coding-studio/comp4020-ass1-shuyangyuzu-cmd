@@ -108,7 +108,7 @@ describe("resultView — correct (p=50)", () => {
   const view: ResultView = resultView(CORRECT);
 
   it("uses the approved heading and explanation", () => {
-    expect(view.heading).toBe("Exactly right");
+    expect(view.heading).toBe("Exactly right!");
     expect(view.explanation).toBe(
       "The elevator reached the target exactly as its velocity reached zero. This is the fastest valid journey.",
     );
@@ -258,7 +258,7 @@ describe("resultViewAdvanced — correct (p=50)", () => {
   const view: ResultView = resultViewAdvanced(CORRECT_ADV);
 
   it("carries the same minimumMessage as Beginner", () => {
-    expect(view.heading).toBe("Exactly right");
+    expect(view.heading).toBe("Exactly right!");
     expect(view.minimumMessage).toBe("This is the fastest possible time to stop exactly at the target.");
   });
 });

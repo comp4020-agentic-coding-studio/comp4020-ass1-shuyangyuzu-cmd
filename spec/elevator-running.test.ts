@@ -486,6 +486,31 @@ describe("Reduced motion", () => {
   });
 });
 
+describe("Result heading celebration class", () => {
+  async function reachResult(p: number): Promise<HTMLElement> {
+    const jsdom = await renderPlayPage();
+    const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
+    preferReducedMotion(jsdom);
+    installFakeRaf(jsdom);
+    initElevatorUI(root);
+    const input = required<HTMLInputElement>(root, '[data-testid="percentage-input"]');
+    setPercentage(jsdom, input, p);
+    required<HTMLButtonElement>(root, '[data-testid="run-button"]').click();
+    return root;
+  }
+
+  it.each([
+    ["short", 35, false],
+    ["correct", 50, true],
+    ["overshoot", 65, false],
+  ] as const)("applies the celebration class to the heading only for %s", async (_label, p, expectCelebrate) => {
+    const root = await reachResult(p);
+    const heading = required<HTMLElement>(root, '[data-testid="result-heading"]');
+    expect(heading.classList.contains("result-heading-celebrate")).toBe(expectCelebrate);
+    expect(heading.classList.contains("punchline")).toBe(true);
+  });
+});
+
 describe("Stale queued animation callback after Result", () => {
   it("cannot mutate or duplicate Result when invoked directly after Result has already been reached", async () => {
     const jsdom = await renderPlayPage();

@@ -484,7 +484,7 @@ the wrong-phase call is still expressible and therefore testable.
 - Run button: "Run"
 - Retry button: "Try again"
 - Classification labels: `short` → "Too early"; `correct` → "Exactly
-  right"; `overshoot` → "Too late"
+  right!"; `overshoot` → "Too late"
 - Explanations:
   - `short`: "Braking started too early. The elevator stopped at rest, but
     before the target. Move the braking point higher and try again."
@@ -501,6 +501,21 @@ None of this copy uses the forbidden vocabulary in "Audience and progressive
 disclosure," and no view in this slice ever renders the raw internal
 `classification` string (`"short"`/`"correct"`/`"overshoot"`) — only the
 mapped labels above.
+
+### Correct-result celebration (correction)
+
+The `result-heading` element gets an extra `result-heading-celebrate` class
+only when `classification === "correct"` (both Beginner's `buildResultSection`
+and Advanced's `buildAdvancedResultSection`) — `short` and `overshoot`
+headings are unaffected. That class drives a ~550ms CSS keyframe pop
+(scale/translate/small rotate, no opacity flashing) defined in
+`global.css`, disabled entirely under `prefers-reduced-motion: reduce` (the
+existing reduced-motion `animation: none` block covers it), so the heading's
+final, correct text is present immediately either way — the animation is
+purely cosmetic and never gates or delays the heading's content. Because the
+heading is a freshly created DOM node every time a Result mounts, the
+animation replays naturally on every subsequent correct attempt with no
+manual animation-reset code.
 
 ### Display mapping and formatting
 

@@ -174,7 +174,8 @@ export function initElevatorUI(root: HTMLElement): void {
 
     const heading = doc.createElement("h2");
     heading.dataset.testid = "result-heading";
-    heading.className = "punchline";
+    heading.className =
+      attemptResult.classification === "correct" ? "punchline result-heading-celebrate" : "punchline";
     heading.textContent = view.heading;
     section.appendChild(heading);
 
@@ -524,7 +525,8 @@ export function initElevatorUI(root: HTMLElement): void {
 
     const heading = doc.createElement("h2");
     heading.dataset.testid = "result-heading";
-    heading.className = "punchline";
+    heading.className =
+      attemptResult.classification === "correct" ? "punchline result-heading-celebrate" : "punchline";
     heading.textContent = view2.heading;
     section.appendChild(heading);
 

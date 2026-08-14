@@ -81,6 +81,25 @@ h1 {
   text-shadow: 0.12em 0.12em 0 var(--paper), 0.14em 0.14em 0 var(--ink);
 }
 
+.result-heading-celebrate {
+  transform-origin: center;
+  animation: result-heading-pop 550ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes result-heading-pop {
+  0% {
+    transform: scale(0.6) translateY(0.3em) rotate(-3deg);
+  }
+
+  60% {
+    transform: scale(1.08) translateY(-0.05em) rotate(1.5deg);
+  }
+
+  100% {
+    transform: scale(1) translateY(0) rotate(0deg);
+  }
+}
+
 /* The shaft is the dominant illustration: a cutaway building facade. */
 [data-testid="predicting"],
 [data-testid="running"],
@@ -619,7 +638,8 @@ section[data-testid="running"]:has([data-cue="braking"]) .car::after {
 
 @media (prefers-reduced-motion: reduce) {
   .hero-cargo,
-  .hero-car {
+  .hero-car,
+  .result-heading-celebrate {
     animation: none;
   }
 }

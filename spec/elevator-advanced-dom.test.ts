@@ -598,7 +598,7 @@ describe("Advanced Run — reduced motion completion", () => {
     const expected = resultViewAdvanced(buildAdvancedAttemptResult(model, optimalP));
     const result = required<HTMLElement>(root, '[data-testid="advanced-result"]');
     expect(result.querySelector('[data-testid="result-heading"]')?.textContent?.trim()).toBe(expected.heading);
-    expect(expected.heading).toBe("Exactly right");
+    expect(expected.heading).toBe("Exactly right!");
   });
 
   it("completes via the animated (non-reduced-motion) path too", async () => {
@@ -628,6 +628,25 @@ describe("Advanced Run — reduced motion completion", () => {
 
     expect(root.querySelector('[data-testid="advanced-running"]')).toBeNull();
     expect(root.querySelector('[data-testid="advanced-result"]')).not.toBeNull();
+  });
+});
+
+describe("Advanced Result heading celebration class", () => {
+  it.each([
+    ["short", 35, false],
+    ["correct", 50, true],
+    ["overshoot", 65, false],
+  ] as const)("applies the celebration class to the heading only for %s", async (_label, p, expectCelebrate) => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const input = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+    setValue(jsdom, input, String(p));
+    required<HTMLButtonElement>(root, '[data-testid="advanced-run-button"]').click();
+
+    const heading = required<HTMLElement>(root, '[data-testid="result-heading"]');
+    expect(heading.classList.contains("result-heading-celebrate")).toBe(expectCelebrate);
+    expect(heading.classList.contains("punchline")).toBe(true);
   });
 });
 
