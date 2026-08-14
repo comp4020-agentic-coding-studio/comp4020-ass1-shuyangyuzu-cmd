@@ -12,7 +12,7 @@ import {
 import { projectToShaftPercent, shaftDomain, visualDuration } from "../src/scripts/elevator-animation";
 import { initElevatorUI } from "../src/scripts/elevator-dom";
 import { buildAdvancedHintComparison } from "../src/scripts/elevator-hint";
-import { advancedConceptualHint, resultViewAdvanced } from "../src/scripts/elevator-view";
+import { advancedConceptualHint, formatNumber, resultViewAdvanced } from "../src/scripts/elevator-view";
 import PlayPage from "../src/pages/play.astro";
 import HomePage from "../src/pages/index.astro";
 import PrinciplePage from "../src/pages/principle.astro";
@@ -238,6 +238,104 @@ describe("Advanced model change resets a revealed hint", () => {
   });
 });
 
+// Regression — repeated H/a/b changes and repeated Retry cycles must never
+// accumulate duplicate Hint controls. See INTERACTION.md hint idempotency
+// note.
+describe("Advanced hint — no duplicate controls across repeated parameter changes", () => {
+  it("keeps exactly one advanced-hint-button after each of three consecutive a-input changes", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const aInput = required<HTMLInputElement>(root, '[data-testid="advanced-a-input"]');
+    for (const value of ["2", "3", "4"]) {
+      setValue(jsdom, aInput, value);
+      expect(
+        root.querySelectorAll('[data-testid="advanced-hint-button"]'),
+        `expected exactly one advanced-hint-button after setting a=${value}`,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("keeps exactly one advanced-hint-button after each of three consecutive bare Run -> Retry cycles", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    for (let cycle = 0; cycle < 3; cycle++) {
+      required<HTMLButtonElement>(root, '[data-testid="advanced-run-button"]').click();
+      required<HTMLButtonElement>(root, '[data-testid="advanced-retry-button"]').click();
+
+      expect(
+        root.querySelectorAll('[data-testid="advanced-hint-button"]'),
+        `expected exactly one advanced-hint-button after bare cycle ${cycle + 1}`,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("leaves exactly one fresh trigger with no stale conceptual/reveal/revealed/match/marker nodes when a param changes after the conceptual hint was shown", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click();
+    expect(root.querySelectorAll('[data-testid="advanced-hint-conceptual"]')).toHaveLength(1);
+
+    const bInput = required<HTMLInputElement>(root, '[data-testid="advanced-b-input"]');
+    setValue(jsdom, bInput, "3");
+
+    expect(root.querySelectorAll('[data-testid="advanced-hint-button"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-testid="advanced-hint-conceptual"]')).toHaveLength(0);
+    expect(root.querySelectorAll('[data-testid="advanced-reveal-button"]')).toHaveLength(0);
+  });
+
+  it("leaves exactly one fresh trigger with no stale reveal/match/marker nodes when a param changes after a full reveal, across repeated changes", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const hInput = required<HTMLInputElement>(root, '[data-testid="advanced-h-input"]');
+    for (const value of ["12", "18"]) {
+      required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click();
+      required<HTMLButtonElement>(root, '[data-testid="advanced-reveal-button"]').click();
+      expect(root.querySelectorAll('[data-testid="advanced-hint-revealed"]')).toHaveLength(1);
+      expect(root.querySelectorAll('[data-testid="advanced-fastest-valid-marker"]')).toHaveLength(1);
+
+      setValue(jsdom, hInput, value);
+
+      expect(
+        root.querySelectorAll('[data-testid="advanced-hint-button"]'),
+        `expected exactly one fresh advanced-hint-button after setting H=${value}`,
+      ).toHaveLength(1);
+      expect(root.querySelectorAll('[data-testid="advanced-hint-conceptual"]')).toHaveLength(0);
+      expect(root.querySelectorAll('[data-testid="advanced-reveal-button"]')).toHaveLength(0);
+      expect(root.querySelectorAll('[data-testid="advanced-hint-revealed"]')).toHaveLength(0);
+      expect(root.querySelectorAll('[data-testid="advanced-match-button"]')).toHaveLength(0);
+      expect(root.querySelectorAll('[data-testid="advanced-fastest-valid-marker"]')).toHaveLength(0);
+    }
+  });
+
+  it("produces exactly one state transition per click, with no thrown errors, through conceptual and reveal", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const errors: unknown[] = [];
+    jsdom.window.addEventListener("error", (event) => errors.push(event.error ?? event.message));
+
+    expect(() =>
+      required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click(),
+    ).not.toThrow();
+    expect(errors).toHaveLength(0);
+    expect(root.querySelectorAll('[data-testid="advanced-hint-button"]')).toHaveLength(0);
+    expect(root.querySelectorAll('[data-testid="advanced-hint-conceptual"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-testid="advanced-reveal-button"]')).toHaveLength(1);
+
+    expect(() =>
+      required<HTMLButtonElement>(root, '[data-testid="advanced-reveal-button"]').click(),
+    ).not.toThrow();
+    expect(errors).toHaveLength(0);
+    expect(root.querySelectorAll('[data-testid="advanced-hint-revealed"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-testid="advanced-match-button"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-testid="advanced-fastest-valid-marker"]')).toHaveLength(1);
+  });
+});
+
 // Item 9 — changing the percentage input alone never resets the hint.
 describe("Advanced percentage change alone does not reset the hint", () => {
   it("leaves a revealed hint intact when only the percentage slider changes", async () => {
@@ -252,6 +350,167 @@ describe("Advanced percentage change alone does not reset the hint", () => {
 
     expect(root.querySelector('[data-testid="advanced-hint-revealed"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="advanced-fastest-valid-marker"]')).not.toBeNull();
+  });
+});
+
+// Correction — Advanced-only precise braking input. See INTERACTION.md
+// "Advanced precise braking input (correction)". advanced-percentage-value
+// (read-only span) is replaced by a synchronized editable
+// advanced-percentage-number-input; Beginner's percentage control is
+// untouched (see spec/elevator-ui.test.ts and spec/elevator-hint-dom.test.ts,
+// neither of which reference any of the testids below).
+describe("Advanced precise braking number input (correction)", () => {
+  it("renders a labelled type=number input alongside the unchanged range, plus a visible % outside the input", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    expect(numberInput.type).toBe("number");
+    expect(numberInput.min).toBe("1");
+    expect(numberInput.max).toBe("100");
+    expect(numberInput.step).toBe("0.01");
+
+    const label = numberInput.closest("label");
+    expect(label, "expected the number input to be wrapped in a label").not.toBeNull();
+    expect(label?.textContent).toContain("%");
+
+    expect(root.querySelector('[data-testid="advanced-percentage-value"]')).toBeNull();
+    required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+  });
+
+  it("accepts decimal entry and moves the range and braking marker to match", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+    const aInput = required<HTMLInputElement>(root, '[data-testid="advanced-a-input"]');
+    setValue(jsdom, aInput, "2");
+
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    setValue(jsdom, numberInput, "42.86");
+
+    const rangeInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+    expect(Number(rangeInput.value)).toBe(42.86);
+
+    const model = { ...DEFAULT_ADVANCED_MODEL, a: 2 };
+    const domain = shaftDomain(model);
+    const brakingMarker = required<HTMLElement>(root, '[data-testid="advanced-braking-marker"]');
+    expect(brakingMarker.style.bottom).toBe(
+      `${projectToShaftPercent(switchDistanceAdvanced(model, 42.86), domain)}%`,
+    );
+  });
+
+  it("syncs the range into the number input, and the number input into the range", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const rangeInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+    setValue(jsdom, rangeInput, "63.4");
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    expect(numberInput.value).toBe("63.4");
+
+    setValue(jsdom, numberInput, "28.5");
+    expect(rangeInput.value).toBe("28.5");
+  });
+
+  it("leaves the last valid value in force when the number input is transiently empty, instead of throwing or resetting the marker", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    const rangeInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+    setValue(jsdom, rangeInput, "33");
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    const brakingMarkerBefore = required<HTMLElement>(root, '[data-testid="advanced-braking-marker"]').style.bottom;
+
+    expect(() => setValue(jsdom, numberInput, "")).not.toThrow();
+
+    expect(rangeInput.value).toBe("33");
+    expect(required<HTMLElement>(root, '[data-testid="advanced-braking-marker"]').style.bottom).toBe(
+      brakingMarkerBefore,
+    );
+  });
+
+  it.each(["abc", "0", "150", "-5"])(
+    "rejects invalid/out-of-range text %s without throwing, keeping the last valid value",
+    async (bad) => {
+      const jsdom = await renderPlayPage();
+      const root = await switchToAdvanced(jsdom);
+
+      const rangeInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+      setValue(jsdom, rangeInput, "33");
+      const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+
+      expect(() => setValue(jsdom, numberInput, bad)).not.toThrow();
+
+      expect(rangeInput.value).toBe("33");
+    },
+  );
+
+  it("accepts exactly the percentage text displayed by the revealed hint", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click();
+    required<HTMLButtonElement>(root, '[data-testid="advanced-reveal-button"]').click();
+
+    const revealed = required<HTMLElement>(root, '[data-testid="advanced-hint-revealed"]');
+    const match = revealed.textContent?.match(/(\d+(?:\.\d+)?)%/);
+    expect(match, "expected a percentage in the revealed hint text").not.toBeNull();
+    const displayedText = match![1];
+
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    expect(() => setValue(jsdom, numberInput, displayedText)).not.toThrow();
+
+    const rangeInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+    expect(Number(rangeInput.value)).toBe(Number(displayedText));
+  });
+
+  it("does not reset a revealed hint when the percentage changes via the number input alone", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click();
+    required<HTMLButtonElement>(root, '[data-testid="advanced-reveal-button"]').click();
+
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    setValue(jsdom, numberInput, "17.25");
+
+    expect(root.querySelector('[data-testid="advanced-hint-revealed"]')).not.toBeNull();
+    expect(root.querySelector('[data-testid="advanced-fastest-valid-marker"]')).not.toBeNull();
+  });
+
+  it("still invalidates a revealed hint immediately when a/b/H change, even after using the number input", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click();
+    required<HTMLButtonElement>(root, '[data-testid="advanced-reveal-button"]').click();
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    setValue(jsdom, numberInput, "17.25");
+
+    const bInput = required<HTMLInputElement>(root, '[data-testid="advanced-b-input"]');
+    setValue(jsdom, bInput, "2");
+
+    expect(root.querySelector('[data-testid="advanced-hint-revealed"]')).toBeNull();
+    expect(root.querySelector('[data-testid="advanced-fastest-valid-marker"]')).toBeNull();
+    expect(root.querySelector('[data-testid="advanced-hint-button"]')).not.toBeNull();
+  });
+
+  it("keeps the number input synchronized through advanced-match-button and a Retry cycle", async () => {
+    const jsdom = await renderPlayPage();
+    const root = await switchToAdvanced(jsdom);
+
+    required<HTMLButtonElement>(root, '[data-testid="advanced-hint-button"]').click();
+    required<HTMLButtonElement>(root, '[data-testid="advanced-reveal-button"]').click();
+    required<HTMLButtonElement>(root, '[data-testid="advanced-match-button"]').click();
+
+    const optimalP = optimalSwitchPercentage(DEFAULT_ADVANCED_MODEL);
+    const numberInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-number-input"]');
+    expect(numberInput.value).toBe(formatNumber(optimalP));
+
+    required<HTMLButtonElement>(root, '[data-testid="advanced-run-button"]').click();
+    required<HTMLButtonElement>(root, '[data-testid="advanced-retry-button"]').click();
+
+    const rangeInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
+    expect(numberInput.value).toBe(formatNumber(Number(rangeInput.value)));
   });
 });
 
@@ -292,9 +551,11 @@ describe("Advanced match button", () => {
     matchButton.click();
     const percentageInput = required<HTMLInputElement>(root, '[data-testid="advanced-percentage-input"]');
     expect(Number(percentageInput.value)).toBe(optimalP);
-    expect(required<HTMLElement>(root, '[data-testid="advanced-percentage-value"]').textContent).toContain(
-      `${optimalP}%`,
+    const percentageNumberInput = required<HTMLInputElement>(
+      root,
+      '[data-testid="advanced-percentage-number-input"]',
     );
+    expect(percentageNumberInput.value).toBe(formatNumber(optimalP));
     expect(root.querySelector('[data-testid="advanced-hint-revealed"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="advanced-match-button"]')).not.toBeNull();
 

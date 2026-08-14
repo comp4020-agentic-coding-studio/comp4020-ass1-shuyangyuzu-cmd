@@ -62,10 +62,51 @@ export function initElevatorUI(root: HTMLElement): void {
   let state: UIState = initialUIState;
   let hintState: HintState = initialHintState;
 
-  function handleRevealButtonClick(): void {
-    hintState = revealFastestValid(hintState);
+  // Idempotent Hint renderer: hint is a single retained host whose children
+  // are fully replaced on every render, and any shaft marker is cleared
+  // before being redrawn. This is deliberate — see INTERACTION.md's hint
+  // idempotency note: prefer one render path over scattered
+  // remove()/appendChild() calls that must each remember every earlier
+  // phase's nodes, since that pattern silently duplicates the initial-phase
+  // trigger when a reset happens before the hint was ever opened.
+  function renderHint(focusNew = false): void {
+    hint.replaceChildren();
+    shaft.querySelector('[data-testid="fastest-valid-marker"]')?.remove();
 
-    hint.querySelector('[data-testid="reveal-button"]')!.remove();
+    if (hintState.phase === "hidden") {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.dataset.testid = "hint-button";
+      button.className = "comic-button";
+      button.textContent = COPY.hintButton;
+      button.addEventListener("click", () => {
+        hintState = showConceptualHint(hintState);
+        renderHint(true);
+      });
+      hint.appendChild(button);
+      return;
+    }
+
+    const conceptual = doc.createElement("p");
+    conceptual.dataset.testid = "hint-conceptual";
+    conceptual.tabIndex = -1;
+    conceptual.textContent = COPY.hintConceptual;
+    hint.appendChild(conceptual);
+
+    if (hintState.phase === "conceptual") {
+      const revealButton = doc.createElement("button");
+      revealButton.type = "button";
+      revealButton.dataset.testid = "reveal-button";
+      revealButton.className = "comic-button";
+      revealButton.textContent = COPY.revealButton;
+      revealButton.addEventListener("click", () => {
+        hintState = revealFastestValid(hintState);
+        renderHint(true);
+      });
+      hint.appendChild(revealButton);
+      if (focusNew) conceptual.focus();
+      return;
+    }
 
     const revealed = doc.createElement("p");
     revealed.dataset.testid = "hint-revealed";
@@ -79,51 +120,15 @@ export function initElevatorUI(root: HTMLElement): void {
     marker.style.bottom = `${FASTEST_VALID_PERCENT}%`;
     shaft.appendChild(marker);
 
-    revealed.focus();
-  }
-
-  function handleHintButtonClick(): void {
-    hintState = showConceptualHint(hintState);
-
-    hint.querySelector('[data-testid="hint-button"]')!.remove();
-
-    const conceptual = doc.createElement("p");
-    conceptual.dataset.testid = "hint-conceptual";
-    conceptual.tabIndex = -1;
-    conceptual.textContent = COPY.hintConceptual;
-    hint.appendChild(conceptual);
-
-    const revealButton = doc.createElement("button");
-    revealButton.type = "button";
-    revealButton.dataset.testid = "reveal-button";
-    revealButton.className = "comic-button";
-    revealButton.textContent = COPY.revealButton;
-    revealButton.addEventListener("click", handleRevealButtonClick);
-    hint.appendChild(revealButton);
-
-    conceptual.focus();
-  }
-
-  function buildHintButton(): HTMLButtonElement {
-    const button = doc.createElement("button");
-    button.type = "button";
-    button.dataset.testid = "hint-button";
-    button.className = "comic-button";
-    button.textContent = COPY.hintButton;
-    button.addEventListener("click", handleHintButtonClick);
-    return button;
+    if (focusNew) revealed.focus();
   }
 
   function resetHintUI(): void {
     hintState = resetHint();
-    hint.querySelector('[data-testid="hint-conceptual"]')?.remove();
-    hint.querySelector('[data-testid="reveal-button"]')?.remove();
-    hint.querySelector('[data-testid="hint-revealed"]')?.remove();
-    shaft.querySelector('[data-testid="fastest-valid-marker"]')?.remove();
-    hint.appendChild(buildHintButton());
+    renderHint();
   }
 
-  hint.querySelector<HTMLButtonElement>('[data-testid="hint-button"]')!.addEventListener("click", handleHintButtonClick);
+  renderHint();
 
   function renderPercentage(p: number): void {
     input.value = String(p);
@@ -360,7 +365,7 @@ export function initElevatorUI(root: HTMLElement): void {
   let advancedTargetMarker: HTMLElement;
   let advancedBrakingMarker: HTMLElement;
   let advancedInput: HTMLInputElement;
-  let advancedPercentageValue: HTMLElement;
+  let advancedPercentageInput: HTMLInputElement;
   let advancedHint: HTMLElement;
 
   function renderAdvancedShaftStatic(): void {
@@ -368,10 +373,20 @@ export function initElevatorUI(root: HTMLElement): void {
     advancedTargetMarker.style.bottom = `${projectToShaftPercent(advancedState.model.H, extent)}%`;
   }
 
+  // Full sync: writes both controls' values. Safe to call from anywhere
+  // except the number input's own "input" handler, which must never
+  // overwrite its own value while the visitor is mid-keystroke — see
+  // INTERACTION.md "Advanced precise braking input (correction)".
   function renderAdvancedPercentage(p: number): void {
     const extent = shaftDomain(advancedState.model);
     advancedInput.value = String(p);
-    advancedPercentageValue.textContent = `${formatNumber(p)}%`;
+    advancedPercentageInput.value = formatNumber(p);
+    advancedBrakingMarker.style.bottom = `${projectToShaftPercent(switchDistanceAdvanced(advancedState.model, p), extent)}%`;
+  }
+
+  function renderAdvancedBrakingMarkerAndRange(p: number): void {
+    const extent = shaftDomain(advancedState.model);
+    advancedInput.value = String(p);
     advancedBrakingMarker.style.bottom = `${projectToShaftPercent(switchDistanceAdvanced(advancedState.model, p), extent)}%`;
   }
 
@@ -381,10 +396,47 @@ export function initElevatorUI(root: HTMLElement): void {
     renderAdvancedPercentage(predictingState.p);
   }
 
-  function handleAdvancedRevealButtonClick(): void {
-    advancedHintState = revealFastestValid(advancedHintState);
+  // Mirrors renderHint() above one-for-one for Advanced, per this file's
+  // established Beginner/Advanced duplication convention (see the "Advanced
+  // mode" banner comment). Same idempotency rationale applies.
+  function renderAdvancedHint(focusNew = false): void {
+    advancedHint.replaceChildren();
+    advancedShaft.querySelector('[data-testid="advanced-fastest-valid-marker"]')?.remove();
 
-    advancedHint.querySelector('[data-testid="advanced-reveal-button"]')!.remove();
+    if (advancedHintState.phase === "hidden") {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.dataset.testid = "advanced-hint-button";
+      button.className = "comic-button";
+      button.textContent = COPY.hintButton;
+      button.addEventListener("click", () => {
+        advancedHintState = showConceptualHint(advancedHintState);
+        renderAdvancedHint(true);
+      });
+      advancedHint.appendChild(button);
+      return;
+    }
+
+    const conceptual = doc.createElement("p");
+    conceptual.dataset.testid = "advanced-hint-conceptual";
+    conceptual.tabIndex = -1;
+    conceptual.textContent = advancedConceptualHint(advancedState.model);
+    advancedHint.appendChild(conceptual);
+
+    if (advancedHintState.phase === "conceptual") {
+      const revealButton = doc.createElement("button");
+      revealButton.type = "button";
+      revealButton.dataset.testid = "advanced-reveal-button";
+      revealButton.className = "comic-button";
+      revealButton.textContent = COPY.revealButton;
+      revealButton.addEventListener("click", () => {
+        advancedHintState = revealFastestValid(advancedHintState);
+        renderAdvancedHint(true);
+      });
+      advancedHint.appendChild(revealButton);
+      if (focusNew) conceptual.focus();
+      return;
+    }
 
     const model = advancedState.model;
     const optimalP = optimalSwitchPercentage(model);
@@ -409,49 +461,12 @@ export function initElevatorUI(root: HTMLElement): void {
     matchButton.addEventListener("click", handleAdvancedMatchButtonClick);
     advancedHint.appendChild(matchButton);
 
-    revealed.focus();
-  }
-
-  function handleAdvancedHintButtonClick(): void {
-    advancedHintState = showConceptualHint(advancedHintState);
-
-    advancedHint.querySelector('[data-testid="advanced-hint-button"]')!.remove();
-
-    const conceptual = doc.createElement("p");
-    conceptual.dataset.testid = "advanced-hint-conceptual";
-    conceptual.tabIndex = -1;
-    conceptual.textContent = advancedConceptualHint(advancedState.model);
-    advancedHint.appendChild(conceptual);
-
-    const revealButton = doc.createElement("button");
-    revealButton.type = "button";
-    revealButton.dataset.testid = "advanced-reveal-button";
-    revealButton.className = "comic-button";
-    revealButton.textContent = COPY.revealButton;
-    revealButton.addEventListener("click", handleAdvancedRevealButtonClick);
-    advancedHint.appendChild(revealButton);
-
-    conceptual.focus();
-  }
-
-  function buildAdvancedHintButton(): HTMLButtonElement {
-    const button = doc.createElement("button");
-    button.type = "button";
-    button.dataset.testid = "advanced-hint-button";
-    button.className = "comic-button";
-    button.textContent = COPY.hintButton;
-    button.addEventListener("click", handleAdvancedHintButtonClick);
-    return button;
+    if (focusNew) revealed.focus();
   }
 
   function resetAdvancedHintUI(): void {
     advancedHintState = resetHint();
-    advancedHint.querySelector('[data-testid="advanced-hint-conceptual"]')?.remove();
-    advancedHint.querySelector('[data-testid="advanced-reveal-button"]')?.remove();
-    advancedHint.querySelector('[data-testid="advanced-hint-revealed"]')?.remove();
-    advancedHint.querySelector('[data-testid="advanced-match-button"]')?.remove();
-    advancedShaft.querySelector('[data-testid="advanced-fastest-valid-marker"]')?.remove();
-    advancedHint.appendChild(buildAdvancedHintButton());
+    renderAdvancedHint();
   }
 
   function handleAdvancedModelFieldChange(field: "H" | "a" | "b", raw: string): void {
@@ -835,15 +850,36 @@ export function initElevatorUI(root: HTMLElement): void {
     sliderLabel.appendChild(advancedInput);
     contentCol.appendChild(sliderLabel);
 
-    advancedPercentageValue = doc.createElement("span");
-    advancedPercentageValue.dataset.testid = "advanced-percentage-value";
-    advancedPercentageValue.textContent = `${formatNumber(advancedState.p)}%`;
-    contentCol.appendChild(advancedPercentageValue);
+    const numberLabel = doc.createElement("label");
+    numberLabel.appendChild(doc.createTextNode("Exact braking percentage "));
+    advancedPercentageInput = doc.createElement("input");
+    advancedPercentageInput.type = "number";
+    advancedPercentageInput.dataset.testid = "advanced-percentage-number-input";
+    advancedPercentageInput.min = "1";
+    advancedPercentageInput.max = "100";
+    advancedPercentageInput.step = "0.01";
+    advancedPercentageInput.value = formatNumber(advancedState.p);
+    numberLabel.appendChild(advancedPercentageInput);
+    const percentSuffix = doc.createElement("span");
+    percentSuffix.setAttribute("aria-hidden", "true");
+    percentSuffix.textContent = "%";
+    numberLabel.appendChild(percentSuffix);
+    contentCol.appendChild(numberLabel);
 
     advancedInput.addEventListener("input", () => {
       const predictingState = setAdvancedPercentage(advancedState, Number(advancedInput.value));
       advancedState = predictingState;
       renderAdvancedPercentage(predictingState.p);
+    });
+
+    advancedPercentageInput.addEventListener("input", () => {
+      const raw = advancedPercentageInput.value;
+      if (raw.trim() === "") return;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 1 || value > 100) return;
+      const predictingState = setAdvancedPercentage(advancedState, value);
+      advancedState = predictingState;
+      renderAdvancedBrakingMarkerAndRange(predictingState.p);
     });
 
     const advancedRunButton = doc.createElement("button");
@@ -856,8 +892,8 @@ export function initElevatorUI(root: HTMLElement): void {
 
     advancedHint = doc.createElement("div");
     advancedHint.dataset.testid = "advanced-hint";
-    advancedHint.appendChild(buildAdvancedHintButton());
     contentCol.appendChild(advancedHint);
+    renderAdvancedHint();
 
     section.appendChild(contentCol);
 

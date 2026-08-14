@@ -1625,16 +1625,12 @@ names keep every test's intent unambiguous.
   No separate readout span is added for these three: unlike a range input, a
   number input already visibly displays its own value.
 - The percentage control: `<input type="range" data-testid=
-  "advanced-percentage-input" min="1" max="100" step="0.1">` plus
-  `<span data-testid="advanced-percentage-value">`, mirroring Beginner's
-  input+span pair exactly, with the step widened to `0.1` per "Displayed
-  rounding and input step" above; the span's text is
-  `` `${formatNumber(p)}%` ``, not a raw template literal, since `p` may not
-  be an integer. A separate free-typing numeric input paired with this range
-  control (one of the two options the model-contract slice named) is not
-  added in this slice — the MATCH action below is this slice's chosen
-  reliable path to the exact optimum, per that section's own framing of it
-  as "the intended way most visitors will see `correct`."
+  "advanced-percentage-input" min="1" max="100" step="0.1">` paired with a
+  synchronized editable `<input type="number" data-testid=
+  "advanced-percentage-number-input" min="1" max="100" step="0.01">` — see
+  "Advanced precise braking input (correction)" below, which supersedes the
+  read-only `advanced-percentage-value` span this paragraph originally
+  specified and the "not added in this slice" framing that went with it.
 - `<button type="button" data-testid="advanced-run-button">Run</button>`
   (reuses `COPY.runButton` text).
 - `<div data-testid="advanced-hint">` containing exactly
@@ -1722,6 +1718,68 @@ same rules, not a rules reset. Focus moves to `advanced-percentage-input`,
 never to `advanced-h-input`/`advanced-a-input`/`advanced-b-input` or the
 reset hint button, mirroring Beginner's "focus moves to the range input"
 rule exactly.
+
+### Advanced precise braking input (correction)
+
+A manual review after the slice above found the MATCH action alone was not
+enough: a visitor who wants to type the exact optimum rather than click MATCH
+had no way to. This corrects that, in Advanced only — Beginner's percentage
+control (range input, read-only percentage span, integer step `1`, integer
+model contract) is untouched by everything below.
+
+- `advanced-percentage-value` (the read-only `<span>`) is removed. In its
+  place: `<input type="number" data-testid="advanced-percentage-number-input"
+  min="1" max="100" step="0.01">`, wrapped in a `<label>` whose text names the
+  control (e.g. "Exact braking percentage"), immediately followed by a
+  sibling `<span aria-hidden="true">%</span>` inside the same label — visible
+  to sighted visitors as the unit, not read twice by a screen reader since the
+  label's own accessible name already says "percentage" and the `%` glyph is
+  hidden from the accessibility tree.
+- `step="0.01"` here, not the range's `0.1`: the two controls serve different
+  purposes. The range's `0.1` step is a drag granularity affordance from
+  "Displayed rounding and input step" above; the number input's step must
+  instead match that same section's two-decimal display precision
+  (`formatNumber`), so that typing exactly what `advanced-hint-revealed`
+  displays (e.g. `33.33`) is always a valid, in-step value — not rejected or
+  silently rounded by the browser's own step-mismatch validation. This does
+  not change "Displayed rounding and input step" itself, only extends it to a
+  second control with a legitimately different granularity need.
+- Bidirectional sync, both routed through the model layer exactly like the
+  existing range input (never a raw DOM-to-DOM copy): dragging the range
+  calls `setAdvancedPercentage` and then updates the number input's `.value`
+  to `formatNumber(p)`, the braking marker, and (unchanged) never resets the
+  hint. Typing in the number input calls `setAdvancedPercentage` and then
+  updates the range's `.value` and the braking marker, but never rewrites its
+  own `.value` from inside its own `input` handler — overwriting a field
+  while its own keystroke is still being processed would fight the visitor's
+  cursor and could strip characters they are mid-way through typing (e.g. a
+  trailing decimal point). Programmatic updates that do not originate from the
+  number input itself (Retry, `advanced-match-button`, an `H`/`a`/`b` change)
+  continue to write `formatNumber(p)` into it, exactly as they already do for
+  the range input.
+- Transient empty/invalid/out-of-range text policy, decided before any test
+  or implementation: on the number input's `input` event, the DOM layer calls
+  `setAdvancedPercentage` only when the current text is non-empty and
+  `Number.isFinite(value) && value >= 1 && value <= 100`. An empty field (the
+  visitor has just cleared it while retyping), non-numeric text, or a number
+  outside `[1, 100]` is never forwarded to the model and never clamped by the
+  UI either — the last valid `p` simply stays in force, the same "controller
+  enforces validity independently of whatever the UI happens to render"
+  principle the three `H`/`a`/`b` number inputs already rely on in "Defensive
+  input check" above, applied to a fourth field with the same failure mode.
+  `assertValidAdvancedPercentage` remains the authoritative guard against a
+  directly-constructed invalid call; this check exists only so a transient,
+  incomplete keystroke never reaches it.
+- Changing the percentage via the number input alone does not invalidate a
+  revealed optimum, for the identical reason the range input doesn't:
+  `optimalSwitchPercentage(model)` depends on `model`, not `p`. Changing
+  `H`/`a`/`b` continues to invalidate immediately and unconditionally, via the
+  unchanged `handleAdvancedModelFieldChange` path.
+- `advanced-percentage-number-input` is rendered (via the shared
+  `renderAdvancedPercentage`) everywhere `advanced-percentage-input` already
+  is — initial mount, `advanced-match-button`, Retry, an `H`/`a`/`b` change —
+  so the two controls can never visibly disagree except while the number
+  input is mid-edit by the visitor typing into it.
 
 ### Advanced Running and Result
 

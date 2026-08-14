@@ -44,4 +44,19 @@ describe("index.astro — Home", () => {
   it("renders no hint control", () => {
     expect(doc.querySelector('[data-testid="hint"]')).toBeNull();
   });
+
+  it("offers a second call to action into the Principle route", () => {
+    const ctas = [...doc.querySelectorAll(".hero-cta")];
+    expect(ctas).toHaveLength(2);
+    expect(ctas[0].getAttribute("href")).toBe("play.html");
+    expect(ctas[1].getAttribute("href")).toBe("principle.html");
+    expect(ctas[1].textContent?.trim()).not.toBe("");
+  });
+
+  it("gives every link on the page distinct, meaningful accessible text", () => {
+    const links = [...doc.querySelectorAll("a")];
+    const names = links.map((a) => a.textContent?.trim() ?? "");
+    expect(names.every((name) => name.length > 0)).toBe(true);
+    expect(new Set(names).size).toBe(names.length);
+  });
 });

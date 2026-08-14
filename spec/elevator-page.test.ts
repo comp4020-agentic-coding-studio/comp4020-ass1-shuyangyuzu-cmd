@@ -60,6 +60,13 @@ describe("play.astro — navigation and heading", () => {
     expect(doc.querySelector('nav[aria-label="Primary"]')).not.toBeNull();
   });
 
+  it("marks PLAY as the current nav entry", () => {
+    const links = [...doc.querySelectorAll('nav[aria-label="Primary"] a')];
+    const current = links.filter((a) => a.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent?.trim()).toBe("PLAY");
+  });
+
   it("has exactly one h1", () => {
     expect(doc.querySelectorAll("h1")).toHaveLength(1);
   });

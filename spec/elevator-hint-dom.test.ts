@@ -182,6 +182,54 @@ describe("hint — Retry reset", () => {
   });
 });
 
+describe("hint — no duplicate controls across repeated bare Retry cycles", () => {
+  it("keeps exactly one hint-button after each of three consecutive Run -> Retry cycles with no hint interaction", async () => {
+    const jsdom = await renderPlayPage();
+    const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
+    initElevatorUI(root);
+    preferReducedMotion(jsdom);
+
+    for (let cycle = 0; cycle < 3; cycle++) {
+      required<HTMLButtonElement>(jsdom.window.document, '[data-testid="run-button"]').click();
+      required<HTMLButtonElement>(jsdom.window.document, '[data-testid="retry-button"]').click();
+
+      expect(
+        jsdom.window.document.querySelectorAll('[data-testid="hint-button"]'),
+        `expected exactly one hint-button after bare cycle ${cycle + 1}`,
+      ).toHaveLength(1);
+    }
+  });
+});
+
+describe("hint — one click produces exactly one state transition", () => {
+  it("clicking hint-button once does not throw and leaves exactly one conceptual surface and one reveal-button", async () => {
+    const jsdom = await renderPlayPage();
+    const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
+    initElevatorUI(root);
+    preferReducedMotion(jsdom);
+
+    const errors: unknown[] = [];
+    jsdom.window.addEventListener("error", (event) => errors.push(event.error ?? event.message));
+
+    expect(() =>
+      required<HTMLButtonElement>(jsdom.window.document, '[data-testid="hint-button"]').click(),
+    ).not.toThrow();
+
+    expect(errors).toHaveLength(0);
+    expect(jsdom.window.document.querySelectorAll('[data-testid="hint-button"]')).toHaveLength(0);
+    expect(jsdom.window.document.querySelectorAll('[data-testid="hint-conceptual"]')).toHaveLength(1);
+    expect(jsdom.window.document.querySelectorAll('[data-testid="reveal-button"]')).toHaveLength(1);
+
+    expect(() =>
+      required<HTMLButtonElement>(jsdom.window.document, '[data-testid="reveal-button"]').click(),
+    ).not.toThrow();
+
+    expect(errors).toHaveLength(0);
+    expect(jsdom.window.document.querySelectorAll('[data-testid="hint-revealed"]')).toHaveLength(1);
+    expect(jsdom.window.document.querySelectorAll('[data-testid="fastest-valid-marker"]')).toHaveLength(1);
+  });
+});
+
 describe("hint — forbidden vocabulary", () => {
   it("keeps every hint element free of forbidden terms, through conceptual and revealed states", async () => {
     const jsdom = await renderPlayPage();
