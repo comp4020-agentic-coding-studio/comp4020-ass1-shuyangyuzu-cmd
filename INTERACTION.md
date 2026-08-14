@@ -1378,12 +1378,15 @@ no Astro Container, no controller state.
    `switchSpeed(model, 50)`, `optimalTime` = `stopTime(model, 50)`, and
    `classifyAdvanced(model, p)` agrees with `classify(p)` for representative
    short/correct/overshoot `p` values.
-3. For an explicitly asymmetric case (`H=10, a=1.5, b=2`, cross-checked by
-   hand against the closed forms above before being written into the test):
+3. For an explicitly asymmetric case (`H=10, a=1.5, b=2`, computed
+   independently with Node before being written into the test, not by hand):
    `optimalSwitchPercentage ≈ 57.142857`, `optimalSwitchDistance ≈ 5.714286`,
-   `optimalSwitchSpeed ≈ 4.629100`, `optimalTime ≈ 4.938648` (standard
+   `optimalSwitchSpeed ≈ 4.140393`, `optimalTime ≈ 4.830459` (standard
    floating-point closeness for these irrational values, per "Verified model
    and formulas" above — test precision, not a visitor-facing tolerance).
+   The same computation confirms `x_stop(p*)` lands within `~2e-15` m of `H`
+   for this case — four orders of magnitude inside the `1e-9` m tolerance
+   above, with room to spare.
 4. `classifyAdvanced` returns `short` for `p` strictly below `p*` by more
    than the `1e-9` m tolerance in stopping position, `overshoot` strictly
    above it, and `correct` at `p = optimalSwitchPercentage(model)` itself —
