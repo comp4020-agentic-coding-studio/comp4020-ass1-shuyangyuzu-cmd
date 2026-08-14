@@ -86,6 +86,20 @@ describe("Run", () => {
     expect(jsdom.window.document.activeElement).toBe(result);
   });
 
+  it("also renders a change-rules-button alongside retry-button", async () => {
+    const jsdom = await renderPlayPage();
+    const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
+    initElevatorUI(root);
+    preferReducedMotion(jsdom);
+
+    required<HTMLButtonElement>(jsdom.window.document, '[data-testid="run-button"]').click();
+
+    const result = required<HTMLElement>(jsdom.window.document, '[data-testid="result"]');
+    expect(result.querySelector('[data-testid="retry-button"]')).not.toBeNull();
+    const changeRules = required<HTMLButtonElement>(result, '[data-testid="change-rules-button"]');
+    expect(changeRules.textContent?.trim()).toBe("CHANGE THE RULES");
+  });
+
   it.each([20, 50, 65])("renders Result content matching resultView for p=%i", async (p) => {
     const jsdom = await renderPlayPage();
     const root = required<HTMLElement>(jsdom.window.document, '[data-testid="elevator-app"]');
