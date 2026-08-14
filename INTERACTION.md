@@ -1902,6 +1902,181 @@ Reveal tests" and "Running-phase and animation tests" above to Advanced.
     `data-testid` anywhere in their built pages (regression check — this
     slice adds many such testids for the first time).
 
+## Contextual Principle disclosure in Play (approved)
+
+`[Approved design decision]`. Moves the single "learn why this works" entry
+point off Home and onto Play, where it becomes available exactly when a
+visitor has something to be curious about — after they've seen a result —
+rather than being offered speculatively before they've tried anything.
+
+### Home
+
+- The hero's `.hero-cta-group` (`src/pages/index.astro`) keeps exactly one
+  action, `TAKE THE ELEVATOR` → `play.html`; the second anchor
+  (`LEARN WHY` → `principle.html`, `.hero-cta-secondary`) is removed, and
+  `.hero-cta-secondary` is deleted from `global.css` as dead CSS.
+- The shared `WHY?` entry in `SiteHeader.astro`'s primary navigation is
+  unaffected — Principle stays reachable from every route through primary
+  nav; only the speculative *hero* CTA is removed.
+- Home renders no second/hidden hero CTA and no instance of the Play-only
+  contextual link below.
+
+### Play — `SEE WHY IT WORKS`
+
+- A single anchor, authored once in `play.astro`'s server-rendered markup
+  (never JS-built): `<a href="principle.html" data-testid="see-why-link"
+  class="comic-button see-why-link">SEE WHY IT WORKS</a>`, wrapped in a host
+  element `<div data-testid="see-why-link-host" class="play-intro-cta"
+  hidden>` that sits beside the existing `<h1>`/task copy inside a new
+  `.play-intro` row, above `[data-testid="elevator-app"]`.
+- **Hidden state is the persisted "has reached a Result" fact.** The host's
+  native `hidden` attribute starts `true` (removed from the accessibility
+  tree and tab order — not a CSS-only visual hide) and `initElevatorUI`'s
+  `revealSeeWhyLink()` sets it to `false` exactly once per page load, called
+  at the end of both `mountResult` and `mountAdvancedResult` (i.e. on every
+  classification — short, correct, or overshoot — for both Beginner and
+  Advanced results). No code path ever sets it back to `true`, so it is
+  monotonic by construction: Retry, further attempts, `CHANGE THE RULES`,
+  and Advanced parameter changes all leave it revealed. This deliberately
+  does **not** use a separate boolean flag or infer state from whether a
+  Result DOM node currently exists — Retry removes the Result section
+  entirely (see "DOM wiring and lifecycle"), so Result-node presence would
+  be the wrong signal; the host's own persisted `hidden` attribute, sitting
+  outside the `elevator-app` mount root that Retry/mode-switch churn, is the
+  state.
+- Revealing it calls only `seeWhyLinkHost.hidden = false` — it never calls
+  `.focus()` on the host or the link, so it cannot move focus away from the
+  Result section's own existing focus destination, and it never delays
+  Result rendering (a synchronous attribute flip after the Result section is
+  already mounted and focused).
+- A fresh page load (reload, or arriving at Play from Home/nav) resets it to
+  hidden — this is ordinary page-load state, not persisted storage; no
+  `localStorage` or other persistence is added.
+- Desktop (`@media (width >= 40rem)`): the link sits at the right side of
+  `.play-intro`, visually secondary to `RUN`/`Try again` (smaller
+  `.see-why-link` variant of `.comic-button`). Phone: it stacks below the
+  intro copy, centered, without horizontal overflow. Both use the existing
+  `.play-intro` flex/grid row rather than fixed viewport coordinates.
+- Principle renders no instance of this Play-only contextual link.
+
+### Tests (this slice)
+
+1. Fresh Play: `see-why-link-host` is present with the `hidden` attribute and
+   `see-why-link` is not reachable by Tab.
+2. After each of a `short`, a `correct`, and an `overshoot` Beginner Result:
+   exactly one `see-why-link` exists, visible, with `href="principle.html"`.
+3. Result → Retry: `see-why-link` remains, still exactly one.
+4. Multiple retry/result cycles: still exactly one `see-why-link` in the
+   document.
+5. Result → `CHANGE THE RULES`: `see-why-link` remains visible in Advanced.
+6. Advanced parameter changes and further Run/Retry cycles: `see-why-link`
+   remains, still exactly one.
+7. Revealing it (via a Beginner or Advanced Result) does not move
+   `document.activeElement` away from the Result section's existing focus
+   destination.
+8. Home's hero action group contains only `TAKE THE ELEVATOR`; no
+   `LEARN WHY` anchor and no `see-why-link` exists anywhere on Home.
+9. The shared `WHY?` navigation link is present on Home, Play, and
+   Principle.
+10. Principle contains no `see-why-link` element.
+
+## Advanced asymmetry explained in Principle (approved)
+
+`[Approved design decision]`. Extends "Principle page — content and layout
+contract" with the one section Principle was still missing: it explained
+only Beginner's symmetric `a=b` case, leaving Advanced's asymmetric optimum
+(already modeled and tested — see "Advanced mode model and contract") with
+no plain-language or derivational explanation anywhere in the deployed site.
+
+### New section, after `halfway-heading`, before `formal-model`
+
+Heading: `WHAT IF THE RULES AREN'T BALANCED?`. Introduces no new physics —
+every number and formula it states is already implemented and tested in
+`src/model/elevator.ts` (`optimalSwitchPercentage`, `optimalSwitchDistance`);
+this section documents and visualises that existing, verified code, in the
+required order:
+
+1. States plainly that Beginner is the balanced special case `a = b`, which
+   is why halfway is correct there.
+2. Defines Advanced's idealised effective limits in plain language: `a` —
+   how quickly the elevator can speed up; `b` — how quickly it can slow
+   down. Both are explicitly idealised effective limits, not force, mass,
+   motor power, or gravity — no such realism is added to Advanced's
+   controls; that stays out of scope per "Scope exclusions."
+3. States the consequence in plain language *before* any equation: weaker
+   braking (relative to acceleration) means braking must start earlier;
+   stronger braking means it can start later; equal limits mean exactly
+   halfway.
+4. Then the compact derivation, reusing the exact symbols already defined
+   in "Verified asymmetric formulas": at switch distance `s`, `v*² = 2as`;
+   stopping requires `H − s = v*²/(2b) = as/b`; solving gives
+   `s* = Hb/(a+b)` and `p* = 100b/(a+b)` — identical to
+   `optimalSwitchDistance`/`optimalSwitchPercentage`, not a re-derivation
+   with different symbols.
+5. States that changing `H` moves the physical switching distance `s*` and
+   the journey time `T*`, but never changes the optimal *percentage* `p*`
+   (visible directly in the formula: `H` cancels out of `p*=100b/(a+b)`).
+6. Connects this explicitly back to Play: "This is the value recalculated
+   when you change the rules in Play" (final copy may polish this wording,
+   but the connection must remain explicit, not implied).
+
+### Visual
+
+- A compact three-case comparison — weaker braking/earlier,
+  balanced/halfway, stronger braking/later — reusing the existing
+  `.shaft`/`.marker-target`/`.marker-fastest-valid` classes at a smaller
+  scale (new `.mini-shaft` size override only; no new graphic system, no new
+  dependency, no second simulation).
+- Each mini shaft's switch-marker percentage is computed in the page's own
+  frontmatter by calling the real `optimalSwitchDistance`/
+  `projectToShaftPercent`/`shaftDomain` functions against three concrete
+  `AdvancedModel` sample values (one weaker-braking, one balanced, one
+  stronger-braking, all sharing the same `H` so the target marker's position
+  is identical across the three) — never a hardcoded percentage.
+- Desktop (`@media (width >= 40rem)`): the three mini-shafts sit in a row.
+  Phone: they stack in a single column, no horizontal overflow. This is a
+  new, separate visual from the existing sticky `principle-visual` (which
+  stays dedicated to the halfway case referenced by its own figcaption) —
+  it does not join that sticky column.
+
+### Scope and sourcing
+
+- No mass, force, gravity, motor power, or passenger-elevator realism is
+  added to Advanced's controls; `a`/`b` are documented as idealised
+  effective limits, and the existing real-elevator caveat (`real-heading`)
+  is unchanged.
+- The asymmetric formulas are labelled as this project's own elementary
+  kinematic derivation — none of the three existing authoritative sources
+  (unchanged, still only those three) directly establishes the asymmetric
+  case, so no citation is attached to it, and no citation is fabricated for
+  the user's own personal design notes, which are design context, not a
+  public source.
+- Technical terminology in this new section stays inside Principle's
+  existing progressive-disclosure posture (see "Purpose and relationship to
+  Play") — never required to play Beginner or Advanced.
+
+### Tests (this slice)
+
+1. `WHAT IF THE RULES AREN'T BALANCED?` heading exists, positioned after
+   `halfway-heading` and before `formal-model` in document order.
+2. The section's text defines both `a` and `b` in plain language.
+3. The section's text states all three consequences: weaker → earlier,
+   balanced → halfway, stronger → later.
+4. The section's text contains the two formulas `s* = Hb/(a+b)` and
+   `p* = 100b/(a+b)` (accessible text, not only inside an image).
+5. The section's text states that `H` does not change the optimal
+   percentage.
+6. The section's text explicitly connects this to Play's `CHANGE THE RULES`
+   / Advanced recalculation.
+7. Exactly three mini-shaft elements exist in this section, each with a
+   switch-marker `bottom` percentage equal to
+   `projectToShaftPercent(optimalSwitchDistance(sampleModel), shaftDomain(sampleModel))`
+   for its own sample model.
+
+Structural presence of these assertions is not evidence of novice
+clarity — that stays a manual/browser judgment, per the existing rule in
+"Principle page tests (this slice)."
+
 ## Acceptance criteria
 
 Each item is tagged `[Published spec]` (with the supporting quote),

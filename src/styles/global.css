@@ -592,9 +592,47 @@ section[data-testid="running"]:has([data-cue="braking"]) .car::after {
   text-decoration: none;
 }
 
-.hero-cta-secondary {
-  background: var(--ink);
-  color: var(--paper);
+/* Play page — intro row and contextual Principle link */
+.play-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-block-end: 1rem;
+}
+
+.play-intro-copy {
+  min-inline-size: 0;
+}
+
+.play-intro-cta {
+  display: flex;
+  justify-content: center;
+  inline-size: 100%;
+}
+
+.play-intro-cta[hidden] {
+  display: none;
+}
+
+.see-why-link {
+  font-size: 0.85rem;
+  padding: 0.35rem 1rem;
+  min-block-size: 2rem;
+  box-shadow: 0.2rem 0.2rem 0 var(--ink);
+}
+
+@media (width >= 40rem) {
+  .play-intro {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .play-intro-cta {
+    inline-size: auto;
+  }
 }
 
 /* Principle page */
@@ -675,6 +713,37 @@ section[data-testid="running"]:has([data-cue="braking"]) .car::after {
     grid-row: 1;
     position: sticky;
     inset-block-start: 5rem;
+  }
+}
+
+.mini-shaft-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  margin-block-start: 1rem;
+}
+
+.mini-shaft-figure {
+  margin: 0;
+  text-align: center;
+}
+
+.mini-shaft-figure figcaption {
+  margin-block-start: 0.4rem;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.mini-shaft {
+  inline-size: min(100%, 12rem);
+  block-size: clamp(9rem, 26vh, 13rem);
+  margin-inline: auto;
+}
+
+@media (width >= 40rem) {
+  .mini-shaft-row {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
   }
 }
 

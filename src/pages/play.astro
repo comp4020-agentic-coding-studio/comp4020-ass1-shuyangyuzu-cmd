@@ -14,8 +14,15 @@ const brakingPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, initi
 <Layout title={COPY.heading} current="play">
   <main>
     <section aria-labelledby="beginner-heading">
-      <h1 id="beginner-heading">{COPY.heading}</h1>
-      <p data-testid="task">{COPY.task}</p>
+      <div class="play-intro">
+        <div class="play-intro-copy">
+          <h1 id="beginner-heading">{COPY.heading}</h1>
+          <p data-testid="task">{COPY.task}</p>
+        </div>
+        <div data-testid="see-why-link-host" class="play-intro-cta" hidden>
+          <a href="principle.html" data-testid="see-why-link" class="comic-button see-why-link">SEE WHY IT WORKS</a>
+        </div>
+      </div>
       <div data-testid="elevator-app">
         <section data-testid="predicting" class="panel">
           <div class="shaft-col">

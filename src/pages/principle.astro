@@ -1,11 +1,27 @@
 ---
-import { DEFAULT_MODEL, switchDistance } from "../model/elevator";
+import { DEFAULT_MODEL, optimalSwitchDistance, switchDistance } from "../model/elevator";
+import type { AdvancedModel } from "../model/elevator";
 import { projectToShaftPercent, shaftDomain } from "../scripts/elevator-animation";
 import Layout from "../layouts/Layout.astro";
 
 const shaftExtent = shaftDomain(DEFAULT_MODEL);
 const targetPercent = projectToShaftPercent(DEFAULT_MODEL.H, shaftExtent);
 const switchPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, 50), shaftExtent);
+
+const ASYMMETRIC_SAMPLE_MODELS: { label: string; model: AdvancedModel }[] = [
+  { label: "Weaker braking — switch earlier", model: { H: 10, a: 2, b: 1 } },
+  { label: "Balanced — switch halfway", model: { H: 10, a: 1.5, b: 1.5 } },
+  { label: "Stronger braking — switch later", model: { H: 10, a: 1, b: 2 } },
+];
+const asymmetricShafts = ASYMMETRIC_SAMPLE_MODELS.map(({ label, model }) => {
+  const extent = shaftDomain(model);
+  return {
+    label,
+    model,
+    targetPercent: projectToShaftPercent(model.H, extent),
+    switchPercent: projectToShaftPercent(optimalSwitchDistance(model), extent),
+  };
+});
 ---
 
 <Layout title="Why? — the idea behind the puzzle" current="principle">
@@ -79,6 +95,54 @@ const switchPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, 50), s
               numbers ({DEFAULT_MODEL.H} m, {DEFAULT_MODEL.a} m/s²), that switch happens at 5 m, reaching a top speed
               of about 3.87 m/s, for a fastest possible journey of about 5.16 s.
             </p>
+          </section>
+
+          <section aria-labelledby="asymmetric-heading">
+            <h2 id="asymmetric-heading">WHAT IF THE RULES AREN'T BALANCED?</h2>
+            <p>
+              The explanation above is actually the balanced special case: Beginner always sets the acceleration
+              and braking limits equal, so speeding up and slowing down are perfect mirror images and the switch
+              falls exactly halfway. Advanced lets you break that assumption.
+            </p>
+            <p>
+              Advanced defines two idealised effective limits instead of one: <strong>a</strong>, how quickly the elevator can speed up, and <strong>b</strong>, how quickly it can slow down. Neither is a real
+              force, mass, motor power, or gravity value; they're simplified limits on motion, same as Beginner's
+              single acceleration, just no longer required to match each other.
+            </p>
+            <p>
+              If braking is weaker than acceleration, the elevator can't shed speed as quickly, so it has to start
+              braking earlier to still stop exactly on target. If braking is stronger, it can accelerate for
+              longer and brake later. When the two limits are equal, the switch falls exactly halfway, just like
+              Beginner.
+            </p>
+            <p>
+              The same reasoning as before makes this exact. At a switch distance s, accelerating from rest
+              reaches a speed of v*² = 2as. Stopping in the remaining distance then requires
+              H − s = v*²/(2b) = as/b. Solving for the switch distance gives s* = Hb/(a+b), or as a percentage of
+              the journey, p* = 100b/(a+b) — exactly what Play's Advanced Reveal computes.
+            </p>
+            <p>
+              Changing H moves the physical switch distance and the total journey time, but it does not change the optimal percentage: H cancels out of p* = 100b/(a+b) completely. This is the value recalculated when you change the rules in Play.
+            </p>
+
+            <div class="mini-shaft-row">
+              {
+                asymmetricShafts.map(({ label, model, targetPercent: miniTargetPercent, switchPercent: miniSwitchPercent }) => (
+                  <figure class="mini-shaft-figure">
+                    <div class="shaft mini-shaft" data-testid="mini-shaft" data-sample-model={JSON.stringify(model)}>
+                      <div class="marker marker-target" style={`bottom: ${miniTargetPercent}%;`}></div>
+                      <div
+                        data-testid="mini-shaft-switch-marker"
+                        class="marker marker-fastest-valid"
+                        style={`bottom: ${miniSwitchPercent}%;`}
+                      >
+                      </div>
+                    </div>
+                    <figcaption>{label}</figcaption>
+                  </figure>
+                ))
+              }
+            </div>
           </section>
 
           <details data-testid="formal-model">

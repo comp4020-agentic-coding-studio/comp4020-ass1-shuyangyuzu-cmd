@@ -58,9 +58,17 @@ export function initElevatorUI(root: HTMLElement): void {
   const predictingBrakingMarker = predicting.querySelector<HTMLElement>('[data-testid="braking-marker"]')!;
   const shaft = predicting.querySelector<HTMLElement>('[data-testid="shaft"]')!;
   const hint = predicting.querySelector<HTMLElement>('[data-testid="hint"]')!;
+  const seeWhyLinkHost = doc.querySelector<HTMLElement>('[data-testid="see-why-link-host"]');
 
   let state: UIState = initialUIState;
   let hintState: HintState = initialHintState;
+
+  // The host's own `hidden` attribute is the persisted "has reached a
+  // Result this session" fact — see INTERACTION.md "Contextual Principle
+  // disclosure in Play". No separate flag, and never re-hidden.
+  function revealSeeWhyLink(): void {
+    if (seeWhyLinkHost) seeWhyLinkHost.hidden = false;
+  }
 
   // Idempotent Hint renderer: hint is a single retained host whose children
   // are fully replaced on every render, and any shaft marker is cleared
@@ -275,6 +283,7 @@ export function initElevatorUI(root: HTMLElement): void {
     const result = buildResultSection(attemptResult, hintComparison);
     root.appendChild(result);
     result.focus();
+    revealSeeWhyLink();
   }
 
   function buildRunningSection(runningState: RunningState): {
@@ -619,6 +628,7 @@ export function initElevatorUI(root: HTMLElement): void {
     const result = buildAdvancedResultSection(attemptResult, model, hintComparison);
     root.appendChild(result);
     result.focus();
+    revealSeeWhyLink();
   }
 
   function buildAdvancedRunningSection(runningState: AdvancedRunningState): {

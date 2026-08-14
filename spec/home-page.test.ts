@@ -45,12 +45,11 @@ describe("index.astro — Home", () => {
     expect(doc.querySelector('[data-testid="hint"]')).toBeNull();
   });
 
-  it("offers a second call to action into the Principle route", () => {
+  it("has exactly one hero call to action, with no second CTA into Principle", () => {
     const ctas = [...doc.querySelectorAll(".hero-cta")];
-    expect(ctas).toHaveLength(2);
+    expect(ctas).toHaveLength(1);
     expect(ctas[0].getAttribute("href")).toBe("play.html");
-    expect(ctas[1].getAttribute("href")).toBe("principle.html");
-    expect(ctas[1].textContent?.trim()).not.toBe("");
+    expect(ctas[0].textContent?.trim()).toBe("TAKE THE ELEVATOR");
   });
 
   it("gives every link on the page distinct, meaningful accessible text", () => {

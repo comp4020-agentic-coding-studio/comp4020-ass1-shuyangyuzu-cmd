@@ -1,7 +1,8 @@
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
-import { DEFAULT_MODEL, switchDistance } from "../src/model/elevator";
+import { DEFAULT_MODEL, optimalSwitchDistance, switchDistance } from "../src/model/elevator";
+import type { AdvancedModel } from "../src/model/elevator";
 import { projectToShaftPercent, shaftDomain } from "../src/scripts/elevator-animation";
 import PrinciplePage from "../src/pages/principle.astro";
 
@@ -72,6 +73,92 @@ describe("principle.astro — static shaft visual", () => {
     const marker = doc.querySelector('[data-testid="principle-visual"] [data-testid="principle-switch-marker"]');
     expect(marker).not.toBeNull();
     expect(marker?.getAttribute("style")).toContain(`bottom: ${expected}%`);
+  });
+});
+
+describe("principle.astro — asymmetric rules explained", () => {
+  function normalizeWhitespace(text: string): string {
+    return text.replace(/\s+/g, " ").trim();
+  }
+
+  function asymmetricSection(): HTMLElement {
+    const heading = doc.getElementById("asymmetric-heading");
+    expect(heading, "expected an asymmetric-heading element").not.toBeNull();
+    const section = heading?.closest("section");
+    expect(section, "expected asymmetric-heading to sit inside a section").not.toBeNull();
+    return section as HTMLElement;
+  }
+
+  it("positions the new heading after halfway-heading and before formal-model", () => {
+    const halfway = doc.getElementById("halfway-heading");
+    const heading = doc.getElementById("asymmetric-heading");
+    const formal = doc.querySelector('[data-testid="formal-model"]');
+    expect(halfway).not.toBeNull();
+    expect(heading).not.toBeNull();
+    expect(formal).not.toBeNull();
+
+    const DOCUMENT_POSITION_FOLLOWING = doc.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(Boolean(halfway!.compareDocumentPosition(heading!) & DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(heading!.compareDocumentPosition(formal!) & DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
+  it("has the approved heading text", () => {
+    expect(doc.getElementById("asymmetric-heading")?.textContent?.trim()).toBe(
+      "WHAT IF THE RULES AREN'T BALANCED?",
+    );
+  });
+
+  it("defines both a and b in plain language", () => {
+    const text = (asymmetricSection().textContent ?? "").toLowerCase();
+    expect(text).toContain("how quickly the elevator can speed up");
+    expect(text).toContain("how quickly it can slow down");
+  });
+
+  it("states all three consequences: weaker/earlier, balanced/halfway, stronger/later", () => {
+    const text = (asymmetricSection().textContent ?? "").toLowerCase();
+    expect(text).toContain("earlier");
+    expect(text).toContain("halfway");
+    expect(text).toContain("later");
+  });
+
+  it("contains both formulas in accessible text", () => {
+    const text = normalizeWhitespace(asymmetricSection().textContent ?? "");
+    expect(text).toContain("s* = Hb/(a+b)");
+    expect(text).toContain("p* = 100b/(a+b)");
+  });
+
+  it("states that H does not change the optimal percentage", () => {
+    const text = (asymmetricSection().textContent ?? "").toLowerCase();
+    expect(text).toContain("does not change the optimal percentage");
+  });
+
+  it("explicitly connects this to Play's CHANGE THE RULES / Advanced recalculation", () => {
+    expect(asymmetricSection().textContent ?? "").toContain(
+      "recalculated when you change the rules in Play",
+    );
+  });
+
+  it("renders exactly three mini-shafts, sharing one H, with switch markers matching their own sample model", () => {
+    const shafts = [...asymmetricSection().querySelectorAll('[data-testid="mini-shaft"]')];
+    expect(shafts).toHaveLength(3);
+
+    const models = shafts.map((shaft) => {
+      const modelJson = shaft.getAttribute("data-sample-model");
+      expect(modelJson, "expected data-sample-model on each mini-shaft").not.toBeNull();
+      return JSON.parse(modelJson!) as AdvancedModel;
+    });
+
+    expect(new Set(models.map((m) => m.H)).size).toBe(1);
+    expect(models.some((m) => m.a < m.b)).toBe(true);
+    expect(models.some((m) => m.a === m.b)).toBe(true);
+    expect(models.some((m) => m.a > m.b)).toBe(true);
+
+    shafts.forEach((shaft, index) => {
+      const model = models[index];
+      const expected = projectToShaftPercent(optimalSwitchDistance(model), shaftDomain(model));
+      const marker = shaft.querySelector('[data-testid="mini-shaft-switch-marker"]');
+      expect(marker?.getAttribute("style")).toContain(`bottom: ${expected}%`);
+    });
   });
 });
 
