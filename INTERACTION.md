@@ -906,6 +906,65 @@ export function buildHintComparison(p: number, fastestValidP: number): HintCompa
   "percentage points" — is in the forbidden list in "Audience and progressive
   disclosure"; it reuses words already approved there.
 
+### Beginner rules block (approved)
+
+`[Approved design decision]`
+
+- **Observed gap.** Beginner asks the visitor to choose a braking point but
+  never states the problem it's solving: the target height, the elevator's
+  starting condition, or the fixed speed-change rate. Without those, the
+  visitor can only guess, not reason from the model. This is missing problem
+  context for the existing core interaction, not a new feature or a second
+  interaction.
+- The server-rendered Predicting subtree in `play.astro` gains one new child,
+  a `<div data-testid="beginner-rules" class="rules-box">`, authored as the
+  first child of `.content-col` — above the slider label, input, Run button,
+  and hint container. It is static, server-rendered markup with no JS-built
+  state of its own:
+  - `<h2 class="rules-heading">THE RULES</h2>`
+  - `<ul>` with exactly five `<li>` items, each restating one fixed fact of
+    the problem in novice-first language, reading `DEFAULT_MODEL.H` and
+    `DEFAULT_MODEL.a` where rendered rather than duplicating those numbers as
+    unrelated literals:
+    1. the target floor is `${DEFAULT_MODEL.H} m` above where the elevator
+       starts;
+    2. the elevator starts at rest;
+    3. it speeds up and slows down at the same fixed rate,
+       `${DEFAULT_MODEL.a} m/s²`;
+    4. the visitor chooses the one moment it switches from speeding up to
+       braking;
+    5. success means reaching the target at exactly `0 m/s`.
+  - The copy never states the numeric answer (`50%`) or the word "halfway" —
+    the block gives the visitor the problem, not the solution. It also
+    introduces no formula, no specialist control-theory vocabulary beyond
+    what "Audience and progressive disclosure" already forbids, and no new
+    interaction, modal, tooltip, or disclosure — it is inert text.
+- **Lifecycle is inherited, not implemented.** Because the block is a plain
+  child of the retained Predicting element (see "DOM wiring and lifecycle"
+  above), it needs no dedicated show/hide logic:
+  - it is visible immediately on first render, since it's part of the
+    server-rendered Predicting subtree and is not gated behind Hint or
+    Result;
+  - `predicting.remove()` on Run detaches it along with the rest of
+    Predicting, so it is absent from Running and Result;
+  - `root.appendChild(predicting)` on Retry reattaches the same node,
+    unchanged, so the block reappears after Retry with no reset step of its
+    own to write.
+- Advanced already exposes its own editable `H`/`a`/`b` fields in
+  `advanced-predicting`, so this fixed Beginner block is not duplicated
+  there — `advanced-predicting` has no `data-testid="beginner-rules"`
+  descendant, on first render or after any Advanced transition.
+- Visual treatment reuses the existing black-and-white comic bordered-box
+  pattern already established for `[data-testid="formal-model"]` (thin ink
+  border, rounded corner, padding) and the existing display/body font
+  tokens — no new design tokens. Because `.content-col` is already
+  width-constrained by the existing responsive rules at both the mobile
+  single-column stack and the desktop two-column grid, the block adds only
+  vertical content and does not widen the panel at either viewport.
+- The permanent simplified-model disclaimer below the game is unchanged by
+  this addition — it continues to describe the model's real-world
+  limitations, a different purpose from this block's problem statement.
+
 ### Predicting markup extension
 
 - The server-rendered Predicting subtree in `play.astro` gains one new child,
@@ -1927,8 +1986,10 @@ rather than being offered speculatively before they've tried anything.
   (never JS-built): `<a href="principle.html" data-testid="see-why-link"
   class="comic-button see-why-link">SEE WHY IT WORKS</a>`, wrapped in a host
   element `<div data-testid="see-why-link-host" class="play-intro-cta"
-  hidden>` that sits beside the existing `<h1>`/task copy inside a new
-  `.play-intro` row, above `[data-testid="elevator-app"]`.
+  hidden>` that sits beside the task paragraph inside `.play-intro-row`, a
+  second row nested under `.play-intro`, above `[data-testid="elevator-app"]`
+  (see "Play intro layout stability (approved)" below for why the `<h1>` is
+  not in this row).
 - **Hidden state is the persisted "has reached a Result" fact.** The host's
   native `hidden` attribute starts `true` (removed from the accessibility
   tree and tab order — not a CSS-only visual hide) and `initElevatorUI`'s
@@ -1953,11 +2014,44 @@ rather than being offered speculatively before they've tried anything.
   hidden — this is ordinary page-load state, not persisted storage; no
   `localStorage` or other persistence is added.
 - Desktop (`@media (width >= 40rem)`): the link sits at the right side of
-  `.play-intro`, visually secondary to `RUN`/`Try again` (smaller
+  `.play-intro-row`, visually secondary to `RUN`/`Try again` (smaller
   `.see-why-link` variant of `.comic-button`). Phone: it stacks below the
-  intro copy, centered, without horizontal overflow. Both use the existing
-  `.play-intro` flex/grid row rather than fixed viewport coordinates.
+  task paragraph, without horizontal overflow. Both use the existing
+  `.play-intro`/`.play-intro-row` flex rows rather than fixed viewport
+  coordinates.
 - Principle renders no instance of this Play-only contextual link.
+
+### Play intro layout stability (approved)
+
+`[Approved design decision]` — fixes a defect found after the above shipped:
+revealing `see-why-link-host` shrank the flex row it originally shared with
+the `<h1>`, so the heading reflowed (`TARGET` wrapped to a second line) at
+1920×1080 purely because the CTA became visible, not because of any change
+to the heading's own text or font size.
+
+- `.play-intro` (`play.astro`) now has two children, not one shared row:
+  the `<h1 id="beginner-heading">` directly, as its own full-width flex item,
+  and `.play-intro-row` (a sibling, not a wrapper of the h1) holding the task
+  paragraph and the `see-why-link-host`.
+- Because the `<h1>` is no longer a flex item in the same row as the CTA, it
+  never shares main-axis space with `see-why-link-host` — revealing the host
+  changes only `.play-intro-row`'s internal split between the task paragraph
+  and the link, never the `<h1>`'s available width, so its bounding box,
+  height, and line count at a fixed viewport are unaffected by the reveal.
+- `.play-intro-row` is column-stacked (task paragraph above the CTA host) at
+  the same width as the phone default, and becomes a row
+  (`justify-content: space-between`, task paragraph `flex: 1` so it fills the
+  row) only at `@media (width >= 40rem)` — the same breakpoint already used
+  throughout. `see-why-link-host[hidden]` is `display: none`, a flex item
+  removed from layout entirely rather than an empty reserved column, so the
+  task paragraph fills the full row width before the first Result and no
+  blank CTA-sized gap is reserved.
+- The heading's own text, `font-size`, and the `h1` rule in `global.css` are
+  unchanged — this is a layout-structure fix, not a copy or type change.
+- Phone wrapping is untouched: no `white-space: nowrap` is added anywhere;
+  the `<h1>` continues to wrap naturally at whatever width `.play-intro`
+  gives it, consistently before and after a Result, exactly as the fixed
+  Beginner heading copy already did before this fix.
 
 ### Tests (this slice)
 

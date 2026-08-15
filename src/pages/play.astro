@@ -15,12 +15,12 @@ const brakingPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, initi
   <main>
     <section aria-labelledby="beginner-heading">
       <div class="play-intro">
-        <div class="play-intro-copy">
-          <h1 id="beginner-heading">{COPY.heading}</h1>
-          <p data-testid="task">{COPY.task}</p>
-        </div>
-        <div data-testid="see-why-link-host" class="play-intro-cta" hidden>
-          <a href="principle.html" data-testid="see-why-link" class="comic-button see-why-link">SEE WHY IT WORKS</a>
+        <h1 id="beginner-heading">{COPY.heading}</h1>
+        <div class="play-intro-row">
+          <p data-testid="task" class="play-intro-task">{COPY.task}</p>
+          <div data-testid="see-why-link-host" class="play-intro-cta" hidden>
+            <a href="principle.html" data-testid="see-why-link" class="comic-button see-why-link">SEE WHY IT WORKS</a>
+          </div>
         </div>
       </div>
       <div data-testid="elevator-app">
@@ -35,6 +35,16 @@ const brakingPercent = projectToShaftPercent(switchDistance(DEFAULT_MODEL, initi
             </div>
           </div>
           <div class="content-col">
+            <div data-testid="beginner-rules" class="rules-box">
+              <h2 class="rules-heading">THE RULES</h2>
+              <ul>
+                <li>The target floor is {DEFAULT_MODEL.H} m above where the elevator starts.</li>
+                <li>The elevator starts at rest.</li>
+                <li>It speeds up and slows down at the same fixed rate: {DEFAULT_MODEL.a} m/s².</li>
+                <li>You choose the one moment it switches from speeding up to braking.</li>
+                <li>Success means reaching the target at exactly 0 m/s.</li>
+              </ul>
+            </div>
             <label for="percentage-input">{COPY.sliderLabel}</label>
             <input
               id="percentage-input"
