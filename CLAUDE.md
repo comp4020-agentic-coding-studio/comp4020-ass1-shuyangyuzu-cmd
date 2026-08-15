@@ -20,10 +20,15 @@ and see `spec/README.md` for how the checks in this repo relate to it.
 - Keep the dev server running (`pnpm dev`) so you see changes as you make them.
 - Before you push, run `pnpm check`. It runs most of what CI runs --- build,
   lint, and the spec --- so you catch those in seconds instead of waiting for
-  the pipeline. The links check, the evidence check, the secrets scan, and the
-  deploy itself only run in CI; run `pnpm dlx linkinator ./dist --silent`
-  locally against a fresh `pnpm build` for the links check without waiting for
-  CI.
+  the pipeline. The evidence check, the secrets scan, and the deploy itself
+  only run in CI. For the links check without waiting for CI, don't crawl
+  `dist/` directly --- for a base-path build (see `astro.config.ts`'s `base`),
+  linkinator resolves the built absolute `/<repo>/...` asset URLs as
+  filesystem paths under `dist/`, doubling the segment and reporting a false
+  404. Instead build, serve the output under its real base path, and crawl
+  that served URL, the same way CI does:
+  `pnpm build && pnpm preview --port 4989 &` then
+  `pnpm dlx linkinator http://localhost:4989/comp4020-ass1-shuyangyuzu-cmd/ --recurse --silent`.
 - To see what the page actually looks like rather than what you assume it looks
   like, open it in a browser (the `agent-browser` CLI, documented on
   [the course site](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/backpressure/#agent-browser-the-rendered-page-as-ground-truth),
