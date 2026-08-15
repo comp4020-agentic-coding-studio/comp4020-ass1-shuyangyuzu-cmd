@@ -1,0 +1,7 @@
+## What was the breakthrough that moved the work forward?
+
+I stopped accepting a green test suite at face value. The fake-clock test helper I had accepted started its timestamp at 0, which quietly made "time since the document loaded" and "time since this Run began" the same number — an assumption baked into the test's own setup, not into the code it was exercising. Any implementation that read the raw requestAnimationFrame timestamp instead of subtracting the session's own origin would have passed anyway, by coincidence. Once I noticed that, I required a non-zero-origin test capable of failing for the right reason, and only then accepted the implementation that made the distinction real: subtracting the first callback's own timestamp rather than trusting the document timeline directly.
+
+## What did this work change about who I want to be as a software developer?
+
+Before this, "the tests pass" was close enough to "the thing is probably fine" in my head. Now I ask a further question before I accept agent-written code on the strength of a green suite: could this test have passed by coincidence, because of an assumption in the test's own setup rather than in the thing it claims to check? Directing this project meant less time typing implementation and more time deciding what evidence I would actually trust before signing off on it. That's the habit I want to carry forward — not just requiring tests, but interrogating whether their starting conditions still exercise the real failure mode, or just happen to match it.

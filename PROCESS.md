@@ -1,83 +1,13 @@
-# Process overview
+# Process
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and each brief adds its own word count and moment count.
-
-## What I built
-
-One paragraph: the thing, and the idea behind it.
+I built a small elevator-timing puzzle: a Beginner mode with one fixed symmetric acceleration/braking limit and an Advanced mode with independently tunable acceleration/braking limits, both served from a single Play route, plus a Principle page deriving the same optimal-switch-percentage formula the Play hint reveals.
 
 ## The moments that mattered
 
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
+**1. Continuous boundary events versus render timing.** Before any elevator code existed, I added a CLAUDE.md rule ([`92451c6`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/92451c6)) requiring boundary events to be checked exactly, never inferred from animation-frame sampling. That commit establishes only the rule; the model and its tests came later, so I am not claiming it alone proves the follow-through. I then required the trajectory API to be built test-first against that rule: [`d96197f`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/d96197f) adds `spec/elevator-trajectory.test.ts` against functions that do not exist yet in `src/model/elevator.ts`, asserting `position=0`/`velocity=0` at `t=0`, `position=switchDistance(model,p)`/`velocity=switchSpeed(model,p)` at `switchTime`, and `position=stopPosition(model,p)`/`velocity=0` at `stopTime` — three distinct boundary states, not one repeated zero. I accepted the implementation in [`96d7683`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/96d7683) only once it satisfied those exact assertions for every `p` from 1 to 100, rather than the tolerance-based check the obvious approach would have used.
 
-1. **what happened** --- the problem, or the thing the agent got wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
+**2. Session-relative `requestAnimationFrame` time.** The fake-clock test helper's default start timestamp was `0`, which made "time since the document loaded" and "time since this Run began" coincide, which left the distinction between document time and run time untested. I rejected keeping that zero-origin harness as sufficient evidence. In [`f0b0f4e`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/f0b0f4e) I required a new test starting the fake clock at `60,000`ms instead, so the two quantities would actually diverge, asserting the Running view still shows exact `t=0` state on its first frame rather than jumping to Result. I accepted the corresponding implementation in [`1250991`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/1250991) only after it satisfied that non-zero-origin test: `sessionStartTimestamp`/`physicalTimeAt` subtracts the session's own first callback timestamp rather than using the raw document-timeline value. I can't claim a finished production implementation was ever green under the old, coincidental setup — the test-harness correction landed before the animation feature was built — only that the old setup could not have caught this class of error.
 
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** rather than in another prompt --- a rule added to
-`CLAUDE.md`, a check wired up, an attempt thrown away: re-prompting until it
-passes is the routine case, and changing what the agent works against is the
-skilled one.
+**3. Idempotent hint rendering.** Beginner and Advanced hint panels were being rebuilt with individual `appendChild` calls and no clearing step, so repeated Retry cycles or Advanced parameter changes accumulated duplicate buttons and markers. I rejected the narrower fix of removing the specific duplicate node once spotted, and required a systemic invariant instead: every render pass calls `.replaceChildren()` on one retained host before rebuilding, for both hint containers, so contents are always determined by current state rather than accumulated history. I accepted [`ab9b935`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/ab9b935) once it included two new regression suites — repeated parameter changes and repeated bare Retry cycles — that each drive several cycles and assert exactly one live trigger and marker throughout. The fix and its regression tests landed in the same commit; I can't corroborate from history how the accumulation was first noticed, only that no regression coverage for repeated cycles existed before this commit.
 
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
-
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
-
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
-
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
-
-### A worked moment, for shape
-
-Delete this section along with the rest of the boilerplate --- it's here to show
-the four jobs in one paragraph, not to be imitated in content.
-
-> The date formatter kept coming back with `toLocaleDateString()` and no locale
-> argument, so the same build rendered differently on my machine and in CI. I'd
-> already re-prompted it twice, which fixed the line but not the habit, so the
-> third time I put the rule in `CLAUDE.md` instead
-> ([`3f9ac21`](https://github.com/YOUR-ORG/YOUR-REPO/commit/3f9ac21)) and added
-> a spec test that fails on a bare `toLocaleDateString`. That's what told me it
-> had actually taken: the test went red against the old code and green against
-> the new, and the next two features it wrote passed it without prompting
-> ([`3f9ac21...b7e0d14`](https://github.com/YOUR-ORG/YOUR-REPO/compare/3f9ac21...b7e0d14)).
-
-## Before you ship
-
-`pnpm check:evidence` verifies your citations resolve to real commits, that the
-current reflection entry is in `reflections/`, and that your `CLAUDE.md` is
-there --- before a marker ever opens the file. It checks that your map is
-traceable, not that it is good: the marker judges whether your small,
-deliberately chosen set of moments shows real judgement and reflection. A green
-check is not a substitute for that curation.
-
-Images are deliberately not checked, because whether one renders is visible the
-moment you look. Open this file on GitHub and look at it before you ship.
+**4. One Play route, not two.** I chose a single Play route to serve both modes, keeping Advanced as a deeper version of the same mechanic rather than a second destination. [`cccfe87`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/cccfe87) records that route decision — moving Beginner into `play.astro` with Advanced named to switch the same interface in place later. [`f9bc819`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-shuyangyuzu-cmd/commit/f9bc819) records the later implementation that honoured it, wiring Advanced's Predicting/Running/Result sections into the same `elevator-dom.ts` controller rather than a new page. The route tests render the real Play page, while the built-page invariant confirms the intended three-page structure without an Advanced-specific route.
